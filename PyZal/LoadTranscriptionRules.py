@@ -97,9 +97,9 @@ class TranscriptionRules:
 
 if __name__== "__main__":
 
-    lib_path = '../x64/Release/MainLibCTypes.dll'
-    db_path = '../ZalData/ZalData_Master_TRANS_.db3'
+    lib_path = 'ZalPythonItf.dll'
+    db_path = 'C:/dev/Zal-Data/ZalData/ZalData_oxr_gram.db3'
 
-    t = TranscriptionRules(lib_path, db_path, 'C:/git-repos/Zal-Windows/ZalData/TranscriptionRules.json')
+    t = TranscriptionRules(lib_path, db_path, 'C:/dev/Zal-Data/ZalData/TranscriptionRules.json')
     t.load_rules()
 

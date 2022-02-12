@@ -26,8 +26,8 @@ class Database:
 
 if __name__ == '__main__':
 
-    lib_path = '../x64/Release/MainLibCTypes.dll'
-    db_path = 'C:\git-repos\Zal-Windows\ZalData\ZalData_TEST.db3'
+    lib_path = 'ZalPythonItf.dll'
+    db_path = 'C:\dev\Zal-Data\ZalData\ZalData_Master_TEST.db3'
     db = Database(lib_path, db_path)
-    db.add_lexeme_hashes()
+#    db.add_lexeme_hashes()
     db.generate_all_forms()

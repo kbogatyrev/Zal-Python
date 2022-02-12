@@ -8,10 +8,10 @@ import time
 #
 if __name__== "__main__":
 
-    lib_path = '../x64/Release/MainLibCTypes.dll'
-    db_path = '../ZalData/ZalData_05_14_2020_Pasternak.db3'
+    lib_path = 'ZalPythonItf.dll'
+    db_path = 'C:\dev\Zal-Data\ZalData\ZalData_oxr_gram.db3'
 #    text_path = "../ZalData/Pasternak_05_2020.txt"
-    text_path = "../ZalData/Termidor.txt"
+    text_path = "C:\dev\Zal-Data\ZalData\Oxrannaya_Gramota_UTF-16_BOM.txt"
 
     zal_lib = cdll.LoadLibrary(lib_path)
     if zal_lib is None:
@@ -24,9 +24,9 @@ if __name__== "__main__":
        exit(0)
 
     author = None
-    collection = None
     book = None
-    title = None
+    part = None
+    chapter = None
     date = None
 
     texts = []
@@ -45,10 +45,11 @@ if __name__== "__main__":
 
                     # Parse the text just read:
                     if len(text) > 0:
-                        metadata = 'author = {0} | collection = {1} | book = {2} | title = {3} | date = {4}'.format(
-                            author, collection, book, title, date)
-                        logging.info(title)
-                        last_text_id = zal_lib.llParseText(title, metadata, text)
+                        metadata = 'author = {0} | book = {1} | part = {2} | chapter = {3} | date = {4}'.format(
+                            author, book, part, chapter, date)
+                        logging.info(book)
+                        isProse = True
+                        last_text_id = zal_lib.llParseText(book, metadata, text, isProse)
                         text = ''
 
                     start_tag = match.group(1)
@@ -63,14 +64,12 @@ if __name__== "__main__":
 
                     if 'author' == tag_name:
                         author = value
-                    elif 'collection' == tag_name:
-                        collection = value
                     elif 'book' == tag_name:
                         book = value
-                    elif 'title' == tag_name:
-                        if title:
-                            title += ':'
-                        title = value
+                    elif 'part' == tag_name:
+                        part = value
+                    elif 'chapter' == tag_name:
+                        chapter = value
                     elif 'date' == tag_name:
                         date = value
                     else:
@@ -84,4 +83,6 @@ if __name__== "__main__":
 
     except Exception as e:
         logging.error ('Exception: %s', e)
+
+    gogo = 0
 

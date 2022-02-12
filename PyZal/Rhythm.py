@@ -42,11 +42,11 @@ class Handler:
 #                            FROM tact_group AS tg INNER JOIN lines_in_text AS lit ON tg.line_id = lit.id ORDER BY lit.line_number, tg.id ASC;'
 
         self.word_pos_to_data = {}  # dictionary of lists
-
         self.ready = False
 
         try:
             self.db_connect = sqlite3.connect(db_path)
+#            self.out_file = open('../../Zal-Data/ZalData/oxr_gram_disyll.txt', "w", encoding='utf16')
             self.ready = True
 
         except Exception as e:
@@ -77,7 +77,7 @@ class Handler:
                     root = self.build_tree(tg_rows)
                     verse = []
                     has_rhythm = True
-                    print(chapter, sentence)
+#                    print(chapter, sentence)
                     self.traverse(root, verse, has_rhythm)
 
         except Exception as e:
@@ -191,9 +191,9 @@ class Handler:
                             
                         has_rhythm = False
                                 
-                    verse.append((True, tg.tact_group_id, syll_idx))
+                    verse.append((True, tg.tact_group_id, tg.source_with_stress, syll_idx))
                 else:
-                    verse.append((False, tg.tact_group_id, syll_idx))
+                    verse.append((False, tg.tact_group_id, tg.source_with_stress, syll_idx))
             
         for child in parent.children:
 #            print(child.node_data.tact_group_id)
@@ -202,9 +202,16 @@ class Handler:
 #---------------------------------------------------------------------------------------------------
 
     def save_sequence(self, verse):
-        for syll_tuple in verse:
-            print (syll_tuple)
-        print ('------------------')
+        if len(verse) < 8:
+            return
+
+        current_tg_id = -1
+        for syll in verse:
+            if current_tg_id != syll[1]:
+                out_file.write(syll[2] + ' ')
+                current_tg_id = syll[1]
+        out_file.write('\n\r')
+
 #---------------------------------------------------------------------------------------------------
 
 if __name__== "__main__":
