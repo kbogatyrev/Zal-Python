@@ -1,0 +1,10 @@
+#
+# TOML config file for the analyzer (Python version)
+#
+
+title = "Zal analyzer (Python)"
+
+[paths]
+lib_path_windows = 'C:\git-repos\Zal\Zal-Core\out\build\x64-debug\ZalPythonItf.dll'
+db_path_windows = 'C:\git-repos\Zal\Zal-Data\ZalData\ZalData_Master_Tsvetaeva.db3'
+text_path_windows = 'C:\git-repos\Zal\Zal-Data\ZalData\Tsvetaeva_UTF-16_BOM.txt'

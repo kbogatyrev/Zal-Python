@@ -1,17 +1,30 @@
+import toml
 from ctypes import *
 import logging
 import re
 import time
+import gc
 
 #
 # Helper class
 #
 if __name__== "__main__":
 
-    lib_path = 'ZalPythonItf.dll'
-    db_path = 'C:\dev\Zal-Data\ZalData\ZalData_oxr_gram.db3'
-#    text_path = "../ZalData/Pasternak_05_2020.txt"
-    text_path = "C:\dev\Zal-Data\ZalData\Oxrannaya_Gramota_UTF-16_BOM.txt"
+    gc.enable()
+    gc.set_debug(gc.DEBUG_LEAK)
+
+    with open('analyzer.toml', mode='r') as f:
+        config = toml.load(f)
+    
+    lib_path = config['paths']['lib_path_windows']
+    db_path = config['paths']['db_path_windows']
+    text_path = config['paths']['text_path_windows']
+
+
+#    lib_path = r'C:\git-repos\Zal\Zal-Core\out\build\x64-debug\ZalPythonItf.dll'
+#    db_path = r'C:\git-repos\Zal\Zal-Data\ZalData\ZalData_Master_Tsvetaeva.db3'
+#    text_path = r'C:\git-repos\Zal\Zal-Data\ZalData\Tsvetaeva_UTF-16_BOM.txt'
+#    text_path = r'C:\git-repos\Zal\Zal-Data\ZalData\test.txt'
 
     zal_lib = cdll.LoadLibrary(lib_path)
     if zal_lib is None:
@@ -28,30 +41,34 @@ if __name__== "__main__":
     part = None
     chapter = None
     date = None
+    title = None
+    page = None
 
     texts = []
     text = ''
 
-    last_line = ''
+#    last_line = ''
+
+    metadata = ''
 
     try:
         with open (text_path, encoding='utf-16', mode='r') as reader:
+            lf_count = 0
+            beginning_line_num = 0
             for line_num, line in enumerate(reader):
                 line = line.rstrip()
                 if not line:
+                    lf_count += 1
                     continue
+                logging.info(line_num)
                 match = re.match(r'^\<(\w+?)\s+(.+?)\/(\w+)>', line)
                 if match != None:
-
                     # Parse the text just read:
                     if len(text) > 0:
-                        metadata = 'author = {0} | book = {1} | part = {2} | chapter = {3} | date = {4}'.format(
-                            author, book, part, chapter, date)
+                        metadata = 'author = {0} | book = {1} | part = {2} | chapter = {3} | date = {4} | title = {5}'.format(
+                            author, book, part, chapter, date, title)
                         logging.info(book)
-                        isProse = True
-                        last_text_id = zal_lib.llParseText(book, metadata, text, isProse)
-                        text = ''
-
+                        isProse = False
                     start_tag = match.group(1)
                     value = match.group(2)
                     end_tag = match.group(3)
@@ -72,17 +89,38 @@ if __name__== "__main__":
                         chapter = value
                     elif 'date' == tag_name:
                         date = value
+                    elif 'title' == tag_name:
+                        title = value
+                    elif 'page' == tag_name:
+                        page = value
                     else:
                         logging.error ('Unable to parse tag: {0} in: {1}'.format(tag_name, line))
                 else:
-                    if text:
-                        text += '\r\n'
-                    text += line
+                    if lf_count > 1:
+                        if text:
+                            try:
+                                isProse = False
+                                last_text_id = zal_lib.llParseText(book, metadata, text, beginning_line_num, isProse)
+                                del(text)
+                                text = ''
+                                gc.collect()
+                                beginning_line_num = line_num
+                            except:
+                                import traceback
+                                traceback.print_exc()
+                            #        raw_input("Program crashed; press Enter to exit")
+                                logging.error ('Exception: %s', e)
+                        else:
+                            lf_count = 0
+                    else:
+                        if text:
+                            text += '\r\n'
+                        text += line
 
-                last_line = line
+#                last_line = line
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
+#        raw_input("Program crashed; press Enter to exit")
         logging.error ('Exception: %s', e)
-
-    gogo = 0
-
