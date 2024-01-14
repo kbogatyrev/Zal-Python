@@ -1,4 +1,5 @@
 from ctypes import *
+import toml
 import json
 import sqlite3
 import logging
@@ -8,7 +9,7 @@ import logging
 #
 class TranscriptionRules:
 
-    def __init__(self, lib_path, db_path, json_path):
+    def __init__(self, db_path, json_path):
 
         self.vowel_map = {}
 
@@ -97,9 +98,11 @@ class TranscriptionRules:
 
 if __name__== "__main__":
 
-    lib_path = 'ZalPythonItf.dll'
-    db_path = 'C:/dev/Zal-Data/ZalData/ZalData_oxr_gram.db3'
+    with open('load_transcription_rules.toml', mode='r') as f:
+        config = toml.load(f)
 
-    t = TranscriptionRules(lib_path, db_path, 'C:/dev/Zal-Data/ZalData/TranscriptionRules.json')
+    db_path = config['paths']['db_path_windows']
+    json_path = config['paths']['json_path_windows']
+    t = TranscriptionRules(db_path, json_path)
     t.load_rules()
 

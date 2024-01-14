@@ -1,0 +1,9 @@
+#
+# TOML config file for transcription rules parser
+#
+
+title = "Transcription rules parses for the Zal database"
+
+[paths]
+json_path_windows = 'C:/git-repos/Zal/Zal-Data/ZalData/TranscriptionRules.json'
+db_path_windows = 'C:/git-repos/Zal/Zal-Data/ZalData/ZalData_Master_Tsvetaeva.db3'
