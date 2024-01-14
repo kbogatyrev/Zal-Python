@@ -1,0 +1,9 @@
+#
+# TOML config file for the analytics formatter
+#
+
+title = "Analytics formatter (Python)"
+
+[paths]
+lib_path_windows = 'C:\git-repos\Zal\Zal-Core\out\build\x64-debug\ZalPythonItf.dll'
+db_path_windows = 'C:\git-repos\Zal\Zal-Data\ZalData\ZalData_TEST.db3'

@@ -1,3 +1,4 @@
+import toml
 from ctypes import *
 
 #
@@ -98,10 +99,12 @@ class Parser:
     #  parse_word_form
 
 if __name__== "__main__":
+    
+    with open('parser.toml', mode='r') as f:
+        config = toml.load(f)
 
-    lib_path = '../x64/Debug/MainLibCTypes.dll'
-    db_path = '../ZalData/ZalData_test.db3'
+    lib_path = config['paths']['lib_path_windows']
+    db_path = config['paths']['db_path_windows']
 
     parser = Parser(lib_path, db_path)
     parser.parse_word_form('шедшего')
-
