@@ -1,0 +1,9 @@
+#
+# TOML config file for the analytics formatter
+#
+
+title = "Analytics formatter (Python)"
+
+[paths]
+db_path_windows = 'C:\git-repos\Zal\Zal-Data\ZalData\ZalData_Master_Tsvetaeva.db3'
+output_path_windows = 'C:\git-repos\Zal\Zal-Data\ZalData\ZalData_Master_Tsvetaeva.db3.csv'

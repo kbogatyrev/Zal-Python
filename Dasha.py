@@ -1,3 +1,4 @@
+import toml
 import logging
 import re
 import sys
@@ -128,8 +129,13 @@ class Handler:
             print('{0}| {1}| {2}| {3}'.format(key, value.text, value.line_number, value.position))
 
 if __name__== "__main__":
-    db_path = '../ZalData/ZalData_Master_Pasternak_07_03_2021.db3'
-    output_path = '../ZalData/Pasternak_07_03.csv'
+
+    with open('dasha.toml', mode='r') as f:
+        config = toml.load(f)
+
+    db_path = config['paths']['db_path_windows']
+    output_path = config['paths']['output_path_windows']
+    
     h = Handler(db_path)
     h.get_words()
 
