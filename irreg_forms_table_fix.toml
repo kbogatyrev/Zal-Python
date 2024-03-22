@@ -1,0 +1,10 @@
+#
+# TOML config file (Python version)
+#
+
+title = "Fix irregular forms table (Python)"
+
+[paths]
+db_path_windows = 'C:\git-repos\Zal\Zal-Data\ZalData\ZalData_Master_IRREG.db3'
+output_path = 'C:\git-repos\Zal\Zal-Data\ZalData\irreg_forms_fix_output'
+
