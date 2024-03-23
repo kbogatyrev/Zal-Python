@@ -65,7 +65,7 @@ def find_multiple_inflections_details(cursor, output, logger):
         logger.error(f'Exception trying to retrieve inflection entry: {e}.')
         sys.exit()
 
-def find_missing_inflections(cursor, logger, output):
+def add_missing_inflections(cursor, logger, output):
     try:
         d_id_to_hw = {}
         cursor.execute('''SELECT d.id, hw.source FROM headword AS hw INNER JOIN descriptor AS d on d.word_id=hw.id;''')
@@ -84,8 +84,8 @@ def find_missing_inflections(cursor, logger, output):
             if len(result_rows) < 1:
                 count += 1
                 d_ids_no_infl.append(int(d_id))
-#                print(f'Descriptor {d_id} has no matching inflection entry.')
-#                print(d_id)
+                cursor.execute(f'''INSERT INTO inflection 
+                                   VALUES (NULL, {d_id}, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1);''')
         d_ids_no_infl.sort()
         print(f'Descriptors with missing inflection entries: {count}.', file=output)
         for idx in range(len(d_ids_no_infl)):
