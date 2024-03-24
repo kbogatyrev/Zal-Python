@@ -161,7 +161,7 @@ def create_new_tables(cursor):
     cursor.execute('''CREATE TABLE missing_forms_NEW (id INTEGER PRIMARY KEY ASC, inflection_id INTEGER, content TEXT);''')
     cursor.execute('''CREATE TABLE difficult_forms_NEW (id INTEGER PRIMARY KEY ASC, inflection_id INTEGER, content TEXT);''')
     cursor.execute('''CREATE TABLE second_genitive_NEW (id INTEGER PRIMARY KEY ASC, inflection_id INTEGER, is_edited BOOLEAN DEFAULT(0));''')
-    cursor.execute('''CREATE TABLE second_locative_NEW (id INTEGER PRIMARY KEY ASC, inflection_id INTEGER, is_ptional BOOLEAN DEFAULT(0), 
+    cursor.execute('''CREATE TABLE second_locative_NEW (id INTEGER PRIMARY KEY ASC, inflection_id INTEGER, is_optional BOOLEAN DEFAULT(0), 
                       preposition TEXT, is_edited BOOLEAN(0));''')
 
 def update_irregular_forms(cursor, logger, output):
@@ -198,12 +198,79 @@ def update_irregular_forms(cursor, logger, output):
 
     return True
 
+def update_missing_and_difficult_forms(cursor, logger, output):
+    exceptions = 0
+
+    for forms_table in ['missing_forms', 'difficult_forms']:
+        cursor.execute(f'''SELECT i.id, f.content FROM inflection AS i INNER JOIN {forms_table} 
+                          AS f ON f.descriptor_id = i.descriptor_id;''')
+        form_rows = cursor.fetchall()
+        for form in form_rows:
+            try:
+                cursor.execute(f'''INSERT INTO {forms_table}_new 
+                                   VALUES (NULL, {form[0]}, \'{form[1]}\');''')
+#                                                 infl id     gr hash
+            except Exception as e:
+                exceptions += 1
+                logger.error(f'Failed to update {forms_table}: inflection id={form[0]}, exception {format(e)}')
+                continue
+
+        print(f'Total irregular forms: {len(form_rows)}', file=output)
+
+    print (f'Done with {exceptions} exceptions', file=output)
+
+    return True
+
+def update_second_genitive(cursor, logger, output):
+    exceptions = 0
+
+    cursor.execute(f'''SELECT i.id FROM inflection AS i INNER JOIN second_genitive 
+                       AS sg ON sg.descriptor_id = i.descriptor_id;''')
+    rows = cursor.fetchall()
+    for row in rows:
+        try:
+            cursor.execute(f'''INSERT INTO second_genitive_NEW VALUES (NULL, {row[0]}, 1);''')
+            #                                                                 infl id  is_edited
+        except Exception as e:
+            exceptions += 1
+            logger.error(f'Failed to update second_genitive table: inflection id={row[0]}, exception {format(e)}')
+            continue
+
+    print(f'Total second genitive entries: {len(rows)}', file=output)
+    print(f'Done with {exceptions} exceptions', file=output)
+
+    return True
+
+def update_second_locative(cursor, logger, output):
+    exceptions = 0
+
+    cursor.execute(f'''SELECT i.id, sl.is_optional, sl.preposition FROM inflection AS i INNER JOIN second_locative 
+                       AS sl ON sl.descriptor_id = i.descriptor_id;''')
+    rows = cursor.fetchall()
+    for row in rows:
+        try:
+            cursor.execute(f'''INSERT INTO second_locative_NEW 
+                               VALUES (NULL, {row[0]}, {row[1]}, \'{row[2]}\', 1);''')
+            #                                 infl id   is_opt    preposition  is_edited
+        except Exception as e:
+            exceptions += 1
+            logger.error(f'Failed to update second_genitive table: inflection id={row[0]}, exception {format(e)}')
+            continue
+
+    print(f'Total second genitive entries: {len(rows)}', file=output)
+    print(f'Done with {exceptions} exceptions', file=output)
+
+    return True
 def rename_new_tables(cursor, logger):
     try:
         cursor.execute('DROP TABLE irregular_forms;')
         cursor.execute('ALTER TABLE irregular_forms_NEW RENAME TO irregular_forms;')
         cursor.execute('DROP TABLE irregular_forms_spryazh_sm;')
         cursor.execute('ALTER TABLE irregular_forms_spryazh_sm_NEW RENAME TO irregular_forms_spryazh_sm;')
+        cursor.execute('DROP TABLE irregular_stress;')
+        cursor.execute('ALTER TABLE irregular_stress_NEW RENAME TO irregular_stress;')
+        cursor.execute('DROP TABLE irregular_stress_spryazh_sm;')
+        cursor.execute('ALTER TABLE irregular_stress_spryazh_sm_NEW RENAME TO irregular_stress_spryazh_sm;')
         cursor.execute('DROP TABLE missing_forms;')
         cursor.execute('ALTER TABLE missing_forms_NEW RENAME TO missing_forms;')
         cursor.execute('DROP TABLE difficult_forms;')
@@ -216,23 +283,6 @@ def rename_new_tables(cursor, logger):
         logger.error(f'Failed to modify table: exception {e}')
 
 #ALTER TABLE second_genitive RENAME COLUMN descriptor_id TO inflection_id;
-def update_second_genitive(cursor, logger):
-    try:
-        cursor.execute('''SELECT i.id FROM second_genitive AS if INNER JOIN inflection AS i 
-                          ON if.descriptor_id = i.descriptor_id;''')
-        result_rows = cursor.fetchall()
-        for result in result_rows:
-            cursor.execute(f'''UPDATE second_genitive SET descriptor_id={result[0]};''')
-
-        # descriptor_id -> inflection_id
-        cursor.execute('''ALTER TABLE second_genitive RENAME COLUMN descriptor_id TO inflection_id;''')
-
-    except Exception as e:
-        logger.error(f'Failed to retrieve inflection entry, exception: {e}.')
-        sys.exit()
-
-    return True
-
 def update_missing_forms(cursor, logger):
     try:
         cursor.execute('''SELECT mfo.*, i.id FROM missing_forms_old AS mfo INNER JOIN inflection AS i 
