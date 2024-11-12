@@ -1313,6 +1313,10 @@ def check_aspect_symbol(paragraph, paragraph_offset, descriptor, length = -1):
                     alt_type = semicolon_match.group(3)
                     comma = semicolon_match.group(4)
                     data = semicolon_match.group(5)
+                    data_offset = aspect_sym_idx+semicolon_match.span(5)[0]
+                    run_idx = run_index_from_offset(paragraph, data_offset+1)   # enclosing parenth is not italicized
+                    if paragraph.runs[run_idx].italic:
+                        data = ''
                     if len(data) > 0:
                         data_match = re.match(r'\s*?\((\S+?)\).*', data)
                         if data_match:
