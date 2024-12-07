@@ -1122,8 +1122,15 @@ def check_square_brackets(paragraph, paragraph_offset, descriptor):
 
     return right_bracket_offset + 1
 
-def preprocess_aspect_pair_text(paragraph, paragraph_offset):
+def preprocess_aspect_pair_text(paragraph, paragraph_offset, type=0):
+    italic = False
     current_offset = paragraph_offset
+
+    koko = paragraph.text[current_offset-1:]
+    run_idx = run_index_from_offset(paragraph, current_offset)
+    if paragraph.runs[run_idx].italic and koko[0] != '(':
+        print(f'*************** {paragraph.text}')
+
     preprocessed = u''
     while  current_offset < len(paragraph.text) and paragraph.text[current_offset] != u')' and not paragraph.text[current_offset] in white_space_characters:
         run_idx = run_index_from_offset(paragraph, current_offset)
@@ -1134,11 +1141,12 @@ def preprocess_aspect_pair_text(paragraph, paragraph_offset):
         preprocessed += paragraph.text[current_offset]
         current_offset += 1
 
-    return preprocessed
+    return preprocessed, italic
 
 def handle_sv_to_nsv(paragraph, paragraph_offset):
     type = 0
     data = u''
+    italic = False  # currently unused
     sv_nsv_match = re.match(u'(I{1,3}).*', paragraph.text[paragraph_offset:])
     if sv_nsv_match:
         if sv_nsv_match.group(1) != None:
@@ -1148,26 +1156,26 @@ def handle_sv_to_nsv(paragraph, paragraph_offset):
             if (u'I') == sv_nsv_match.group(1):
                 sv_nsv_vowel_match = re.match(r'(\((\-[ёоа]\-)\)).*', paragraph.text[paragraph_offset:])
                 if sv_nsv_vowel_match:      # single vowel
-                    data = preprocess_aspect_pair_text(paragraph, paragraph_offset+sv_nsv_vowel_match.start(2))
+                    data, italic = preprocess_aspect_pair_text(paragraph, paragraph_offset+sv_nsv_vowel_match.start(2))
                     paragraph_offset += sv_nsv_vowel_match.end(1)
                 else:                       # word or fragment
                     sv_nsv_word_match = re.match(r'\(([абвгдеёжзийклмнопрстуфхцчшщъыьэюя]+)\).*', paragraph.text[paragraph_offset:])
                     if sv_nsv_word_match:
-                        data = preprocess_aspect_pair_text(paragraph, paragraph_offset+sv_nsv_word_match.start(1))
+                        data, italic = preprocess_aspect_pair_text(paragraph, paragraph_offset+sv_nsv_word_match.start(1))
                         paragraph_offset += sv_nsv_word_match.end(1)
             elif (u'II') == sv_nsv_match.group(1) or (u'III') == sv_nsv_match.group(1):
                 sv_nsv_word_match = re.match(r'\(([абвгдеёжзийклмнопрстуфхцчшщъыьэюя]+)\).*', paragraph.text[paragraph_offset:])
                 if sv_nsv_word_match:
-                    data = preprocess_aspect_pair_text(paragraph, paragraph_offset+sv_nsv_word_match.start(1))
+                    data, italic = preprocess_aspect_pair_text(paragraph, paragraph_offset+sv_nsv_word_match.start(1))
                     paragraph_offset += sv_nsv_word_match.end(1)
             else:
                 warning(db_cursor, r'Unexpected symbol(s) in SV to NSV type field', paragraph)
 
     else:
-        length = 0;
+        length = 0
         while paragraph_offset+length < len(paragraph.text) and not (paragraph.text[paragraph_offset+length] in white_space_characters):
             length += 1
-        data = preprocess_aspect_pair_text(paragraph,  paragraph_offset)
+        data, italic = preprocess_aspect_pair_text(paragraph,  paragraph_offset)
         paragraph_offset += length
 
     return paragraph_offset, type, data
@@ -1175,6 +1183,7 @@ def handle_sv_to_nsv(paragraph, paragraph_offset):
 def handle_nsv_to_sv(paragraph, paragraph_offset):
     type = 0
     data = u''
+    italic = False      # currently not changed
     nsv_sv_match = re.match(r'(\d{1,2}).*', paragraph.text[paragraph_offset:])
     if nsv_sv_match:
         type = int(nsv_sv_match.group(1))
@@ -1198,12 +1207,12 @@ def handle_nsv_to_sv(paragraph, paragraph_offset):
         else:
             nsv_sv_word_match = re.match(r'(\((.+?)\)).*', paragraph.text[paragraph_offset:])
             if nsv_sv_word_match:
-                data = preprocess_aspect_pair_text(paragraph, paragraph_offset+nsv_sv_word_match.start(2))
+                data, italic = preprocess_aspect_pair_text(paragraph, paragraph_offset+nsv_sv_word_match.start(2), type)
                 paragraph_offset += nsv_sv_word_match.end(2) + 1
     else:
         whole_word_match = re.match(r'^([абвгдеёжзийклмнопрстуфхцчшщъыьэюя]+)(.*)', paragraph.text[paragraph_offset:])
-        if whole_word_match != None:
-            data = preprocess_aspect_pair_text(paragraph, paragraph_offset+whole_word_match.start(1))
+        if whole_word_match is not None:
+            data, italic = preprocess_aspect_pair_text(paragraph, paragraph_offset+whole_word_match.start(1))
             paragraph_offset += whole_word_match.end(1)
 
     return paragraph_offset, type, data
@@ -1211,7 +1220,7 @@ def handle_nsv_to_sv(paragraph, paragraph_offset):
 def check_stored_aspect_pairs(descriptor, ap_type):
     global num_multiple_aspect_pairs
 
-    sql_select = f"""SELECT ap.descriptor_id, ap.type, ap.data, ap.comment FROM aspect_pair ap
+    sql_select = f"""SELECT ap.descriptor_id, d.trailing_comment, ap.type, ap.data, ap.comment FROM aspect_pair ap
 	INNER JOIN descriptor d ON d.id=ap.descriptor_id  
 	INNER JOIN inflection i ON i.descriptor_id=d.id
 	WHERE d.graphic_stem='{descriptor.graphic_stem}'
@@ -1219,7 +1228,8 @@ def check_stored_aspect_pairs(descriptor, ap_type):
 		AND d.is_reflexive={descriptor.is_reflexive}
 		AND i.inflection_type={descriptor.inflection_group.type}
 		AND i.accent_type1={descriptor.inflection_group.accent_type_1}
-		AND i.accent_type2={descriptor.inflection_group.accent_type_2};"""
+		AND i.accent_type2={descriptor.inflection_group.accent_type_2}
+		AND d.trailing_comment='{descriptor.trailing_comment}';"""
 
     db_cursor.execute(sql_select)
     rc = True
@@ -1228,9 +1238,9 @@ def check_stored_aspect_pairs(descriptor, ap_type):
     if len(rows) != 1:
         rc = False
         num_multiple_aspect_pairs += 1
-        print(f'Number of aspect pair entries: {len(rows)}')
+#        print(f'Number of aspect pair entries: {len(rows)}')
         for row in rows:
-            print(f'\t{headword.headword_text}: {row[0]}|{row[1]}|{row[2]}|{row[3]}')
+            print(f'Skipped:\t{headword.headword_text}: {row[0]}|{row[1]}|{row[2]}|{row[3]}|{row[4]}')
     else:
         row = rows[0]
         descriptor_id = rows[0][0]
@@ -1240,7 +1250,76 @@ def check_stored_aspect_pairs(descriptor, ap_type):
 
     return rc, descriptor_id
 
-def update_nsv_to_sv_pair(descriptor_id, type, data, comment):
+def check_stored_aspect_pair_variants(descriptor, ap_type, alt_ap_type, separator, data):
+    global num_multiple_aspect_pairs
+
+    sql_select = f"""
+    SELECT ap.id, ap.descriptor_id, d.trailing_comment, ap.type, ap.data, ap.is_variant, ap.comment, ap.is_edited 
+    FROM aspect_pair ap
+	INNER JOIN descriptor d ON d.id=ap.descriptor_id  
+	INNER JOIN inflection i ON i.descriptor_id=d.id
+	WHERE d.graphic_stem='{descriptor.graphic_stem}'
+		AND d.main_symbol='{descriptor.main_symbol}'
+		AND d.is_reflexive={descriptor.is_reflexive}
+		AND i.inflection_type={descriptor.inflection_group.type}
+		AND i.accent_type1={descriptor.inflection_group.accent_type_1}
+		AND i.accent_type2={descriptor.inflection_group.accent_type_2}
+		AND d.trailing_comment='{descriptor.trailing_comment}';
+    """
+
+    data_applies_to_both = False
+    if len(separator) > 0:
+        if separator == ',':
+            data_applies_to_both = True
+        else:
+            print(f'Error unexpected separator value: {separator}')
+            return False, descriptor
+
+    db_cursor.execute(sql_select)
+    rc = True
+    rows = db_cursor.fetchall()
+    descriptor_id = 0
+    if len(rows) != 1:
+        rc = False
+        num_multiple_aspect_pairs += 1
+#        print(f'Number of aspect pair entries: {len(rows)}')
+        for row in rows:
+            print(f'Skipped:\t{headword.headword_text}: {row[0]}|{row[1]}|{row[2]}|{row[3]}|{row[4]}')
+        return rc, descriptor_id
+    else:
+        row = rows[0]
+        ap_id = row[0]
+        descriptor_id = row[1]
+        trailing_comment = row[2]
+        gogo = row[3]
+        if int(ap_type) != row[3]:
+            rc = False
+            print(f'Skipped duplicate aspect pair type: {headword.headword_text}: {row[0]}|{row[1]}|{row[2]}|{row[3]}')
+            return rc, descriptor_id
+
+    data1 = ''
+    if data_applies_to_both:
+        data1 = data
+    sql_update = f"""  UPDATE aspect_pair 
+                       SET type = {ap_type}, data = '{data1}', is_variant = 0 
+                       WHERE descriptor_id = {descriptor_id} AND id = {ap_id}; """
+    db_cursor.execute(sql_update)
+
+    params = (descriptor_id,
+              alt_ap_type,
+              data,
+              1,
+              '',
+              0)
+
+    sql_insert = u'INSERT INTO aspect_pair VALUES (NULL, ?, ?, ?, ?, ?, ?)'
+    db_cursor.execute(sql_insert, params)
+
+    db_connection.commit()
+
+    return rc, descriptor_id
+
+def insert_alt_nsv_to_sv_pair(paragraph, descriptor_id, type, data, data_no_use, comment):
     is_variant = True
     is_edited = False
     params = (descriptor_id,
@@ -1252,7 +1331,8 @@ def update_nsv_to_sv_pair(descriptor_id, type, data, comment):
 
     sql_insert = u'INSERT INTO aspect_pair VALUES (NULL, ?, ?, ?, ?, ?, ?)'
     try:
-        print(f'Inserting: descriptor ID: {descriptor_id}, type: {type}, data: {data}, comment: {comment}')
+#        print(f'Paragraph: {paragraph.text}')
+#        print(f'\tInserting: descriptor ID: {descriptor_id}, type: {type}, data: {data}, comment: {comment}')
         db_cursor.execute(sql_insert, params)
         ap_id = db_cursor.lastrowid
         db_connection.commit()
@@ -1265,8 +1345,93 @@ def update_nsv_to_sv_pair(descriptor_id, type, data, comment):
 
     return True
 
-def check_aspect_symbol(paragraph, paragraph_offset, descriptor, length = -1):
+def handle_aspect_semicolon(aspect_sym_idx, paragraph, descriptor):
+    global num_aspect_semicolons
 
+    if aspect_sym_idx < len(paragraph.text) and (';' == paragraph.text[aspect_sym_idx]):
+        semicolon_match = re.match(r';\s(\D+\s)?(\d{1,2})(?://\s(\d{1,2}))?(,?)(.*)?', paragraph.text[aspect_sym_idx:])
+        if semicolon_match:
+            comment = semicolon_match.group(1)
+            type = semicolon_match.group(2)
+            alt_type = semicolon_match.group(3)
+            comma = semicolon_match.group(4)
+#                    data = semicolon_match.group(5)
+            data_no_use = ''
+            data_offset = aspect_sym_idx+semicolon_match.span(5)[0]
+            italic = False
+            data, italic = preprocess_aspect_pair_text(paragraph, data_offset+1)
+            if len(data) > 0 and data[0] == '(':
+                data = data[1:]
+#                    run_idx = run_index_from_offset(paragraph, data_offset+1)   # enclosing parenth is not italicized
+#                    if paragraph.runs[run_idx].italic:
+#                        data_no_use = data
+#                        data = ''
+#            print(f'-------- data = {data}, italicized = {italic}')
+#                   if len(data) > 0:
+#                       data_match = re.match(r'\s*?\((\S+?)\).*', data)
+#                       if data_match:
+#                           data = data_match.group(1)
+#           out_str = f'Semicolon: {headword.headword_text}: comment={comment} | type={type}'
+#            if alt_type is not None:
+#                print(f'Semicolon:\t{paragraph.text}')
+#                out_str += f'//{alt_type} | comma={comma} | data={data}'
+#                print(out_str)
+#                    print(f'Semicolon: comment={comment} type={type} alt. type={alt_type} data={data}')
+            descriptor.graphic_stem = descriptor.make_graphic_stem(headword.headword_text)
+            check_trailing_comment(paragraph, descriptor.post_inflection_group_offset, descriptor)
+
+# Italicized forms must be marked:
+#                    data2 = paragraph.text[paragraph_offset:]
+#                    if len(data2) > 0:
+#                        run_idx = run_index_from_offset(paragraph,
+#                                                        paragraph_offset + 1)  # enclosing parenth is not italicized
+#                        if paragraph.runs[run_idx].italic:
+#                            print(f'++++++++++++{data2}')
+#
+            update, descriptor_id = check_stored_aspect_pairs(descriptor, type)
+            if update:
+                print(f'Semicolon:\t{paragraph.text}')
+                insert_alt_nsv_to_sv_pair(paragraph, descriptor_id, type, data, data_no_use, comment)
+                if alt_type is not None:
+                    insert_alt_nsv_to_sv_pair(paragraph, descriptor_id, alt_type, data, data_no_use, comment)
+
+            num_aspect_semicolons += 1
+#            alternate_match = re.match(r'.*?\s*?//\s*?(\S+?)\s?(\d{1,2})(.*)', paragraph.text[aspect_sym_idx:])
+#            if alternate_match:
+#                print('Alternate: {}'.format (paragraph.text))
+#                descriptor.aspect_alt_pair_comment = alternate_match.group(1)
+#                aspect_sym_idx += alternate_match.start(2)
+#                aspect_sym_idx, descriptor.aspect_alt_pair_type, descriptor.aspect_alt_pair_data = handle_nsv_to_sv(paragraph, aspect_sym_idx)
+
+def handle_aspect_variant(aspect_sym_idx, paragraph, descriptor):
+    global num_aspect_semicolons
+
+    variant_match = re.match(r'(\d{1,2})(?://\s(\d{1,2}))?(,?)(.*)?', paragraph.text[aspect_sym_idx:])
+    if variant_match:
+        type = variant_match.group(1)
+        alt_type = variant_match.group(2)
+        separator = variant_match.group(3)
+        if alt_type:
+            update, descriptor_id = check_stored_aspect_pairs(descriptor, alt_type)
+#            if update:
+#                update_nsv_to_sv_pair(paragraph, descriptor_id, type, data, data_no_use, comment)
+            is_variant = True
+            is_edited = False
+            data_offset = aspect_sym_idx + variant_match.span(4)[0]
+            data, italic = preprocess_aspect_pair_text(paragraph, data_offset+1)
+            if len(data) > 0 and data[0] == '(':
+                data = data[1:]
+
+            descriptor.graphic_stem = descriptor.make_graphic_stem(headword.headword_text)
+            check_trailing_comment(paragraph, descriptor.post_inflection_group_offset, descriptor)
+
+            print(f'Variant:\t{paragraph.text}')
+            check_stored_aspect_pair_variants(descriptor, type, alt_type, separator, data)
+
+    return True
+
+
+def check_aspect_symbol(paragraph, paragraph_offset, descriptor, length = -1):
     global num_aspect_semicolons
     global num_multiple_aspect_pairs
 
@@ -1301,43 +1466,18 @@ def check_aspect_symbol(paragraph, paragraph_offset, descriptor, length = -1):
             aspect_sym_idx += alternate_match.start(2)
             aspect_sym_idx, descriptor.aspect_alt_pair_type, descriptor.aspect_alt_pair_data = handle_sv_to_nsv(paragraph, aspect_sym_idx)
     elif u'нсв' == descriptor.main_symbol:
+#        offset_to_dash = paragraph.text[aspect_sym_idx:].find('(-')
+#        if offset_to_dash > 0:
+#            print(f'================ {paragraph.text}')
+#        nsv_sv_match = re.match(r'(\d).*', paragraph.text[aspect_sym_idx:])
         nsv_sv_match = re.match(r'(\d).*', paragraph.text[aspect_sym_idx:])
         if nsv_sv_match:
-            aspect_sym_idx += nsv_sv_match.start(1)
-            aspect_sym_idx, descriptor.aspect_pair_type, descriptor.aspect_pair_data = handle_nsv_to_sv(paragraph, aspect_sym_idx)
-            if aspect_sym_idx < len(paragraph.text) and (';' == paragraph.text[aspect_sym_idx]):
-                semicolon_match = re.match(r';\s(\D+\s)?(\d{1,2})(?://\s(\d{1,2}))?(,?)(.*)?', paragraph.text[aspect_sym_idx:])
-                if semicolon_match:
-                    comment = semicolon_match.group(1)
-                    type = semicolon_match.group(2)
-                    alt_type = semicolon_match.group(3)
-                    comma = semicolon_match.group(4)
-                    data = semicolon_match.group(5)
-                    data_offset = aspect_sym_idx+semicolon_match.span(5)[0]
-                    run_idx = run_index_from_offset(paragraph, data_offset+1)   # enclosing parenth is not italicized
-                    if paragraph.runs[run_idx].italic:
-                        data = ''
-                    if len(data) > 0:
-                        data_match = re.match(r'\s*?\((\S+?)\).*', data)
-                        if data_match:
-                            data = data_match.group(1)
-                    out_str = f'Semicolon: {headword.headword_text}: comment={comment} | type={type}'
-                    if alt_type != None:
-                        out_str += f'//{alt_type} | comma={comma} | data={data}'
-                    print(out_str)
-#                    print(f'Semicolon: comment={comment} type={type} alt. type={alt_type} data={data}')
-                    descriptor.graphic_stem = descriptor.make_graphic_stem(headword.headword_text)
-                    update, descriptor_id = check_stored_aspect_pairs(descriptor, type)
-                    if update:
-                        update_nsv_to_sv_pair(descriptor_id, type, data, comment)
-
-                    num_aspect_semicolons += 1
-#            alternate_match = re.match(r'.*?\s*?//\s*?(\S+?)\s?(\d{1,2})(.*)', paragraph.text[aspect_sym_idx:])
-#            if alternate_match:
-#                print('Alternate: {}'.format (paragraph.text))
-#                descriptor.aspect_alt_pair_comment = alternate_match.group(1)
-#                aspect_sym_idx += alternate_match.start(2)
-#                aspect_sym_idx, descriptor.aspect_alt_pair_type, descriptor.aspect_alt_pair_data = handle_nsv_to_sv(paragraph, aspect_sym_idx)
+# aspect semicolon:
+            new_aspect_sym_idx = aspect_sym_idx+nsv_sv_match.start(1)
+            new_aspect_sym_idx, descriptor.aspect_pair_type, descriptor.aspect_pair_data = handle_nsv_to_sv(paragraph, new_aspect_sym_idx)
+            handle_aspect_semicolon(new_aspect_sym_idx, paragraph, descriptor)
+# end aspect semicolon
+            handle_aspect_variant(aspect_sym_idx, paragraph, descriptor)
         else:
             aspect_sym_idx, descriptor.aspect_pair_type, descriptor.aspect_pair_data = handle_nsv_to_sv(paragraph, aspect_sym_idx)
     return True, offset
@@ -1352,7 +1492,7 @@ def check_trailing_comment(paragraph, paragraph_offset, descriptor):
     offset_to_next = paragraph_offset
 
     match = re.match (r'^(\s*?)\((.+?)\)\s*?(.*)$', paragraph.text[paragraph_offset:])
-    if match != None:
+    if match is not None:
         descriptor.trailing_comment = match.group(2)
         m3 = match.group(3)
         if len(m3) > 0:
@@ -2143,6 +2283,7 @@ class Descriptor:
         
         ig = InflectionGroup(self)
         current_offset = ig.parse_inflection_group(paragraph, source, current_offset)
+        self.post_inflection_group_offset = current_offset
         if ig != None and ig.has_data:
             self.inflection_group = ig
 

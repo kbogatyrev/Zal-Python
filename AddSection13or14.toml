@@ -1,0 +1,9 @@
+#
+# TOML config file for section 13 entries
+#
+
+title = "Add missing section 13 or 14 entries (Python)"
+
+[paths]
+db_path_windows = 'C:\git-repos\Zal\Zal-Data\ZalData\ZalData_Master.db3'
+#output_path_windows = 'C:\git-repos\Zal\Zal-Data\ZalData\Section14.txt'
