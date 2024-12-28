@@ -20,10 +20,11 @@ if __name__ == "__main__":
         logger.error('Failed to connect to DB: {}.'.format(e))
         sys.exit()
 
-    fix_inflection_table(db_cursor, logger, output)
+    one_time_inflection_fix(db_cursor, logger, output)
+#    fix_inflection_table(db_cursor, logger, output)
 #    fix_second_genitive(db_cursor, logger, output)
-    update_irregular_forms(db_cursor, logger, output)
-    update_missing_and_difficult_forms(db_cursor, logger, output)
-    update_second_locative(db_cursor, logger, output)
+#    update_irregular_forms(db_cursor, logger, output)
+#    update_missing_and_difficult_forms(db_cursor, logger, output)
+#    update_second_locative(db_cursor, logger, output)
 
     db_connect.commit()

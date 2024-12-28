@@ -5,7 +5,7 @@
 title = "Convert CSV files with test data (Python)"
 
 [paths]
-db_path_windows = 'C:\git-repos\Zal\Zal-Data\ZalData\ZalData_Master_TEST.db3'
+db_path_windows = 'C:\git-repos\Zal\Zal-Data\ZalData\ZalData_Master.db3'
 output_path_windows = 'C:\git-repos\Zal\Zal-Data\ZalData\TestDataConversion.log'
 wf_input_path = 'C:\git-repos\Zal\Zal-Data\ZalData\TestData\Dasha_Verbs_11012020_Wordforms.csv'
 stress_input_path = 'C:\git-repos\Zal\Zal-Data\ZalData\TestData\Dasha_Verbs_11012020_Stress.csv'

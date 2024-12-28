@@ -102,7 +102,7 @@ def fix_inflection_table(cursor, logger, output):
                 count += 1
                 d_ids_no_infl.append(int(d_id))
                 cursor.execute(f'''INSERT INTO inflection_NEW 
-                                   VALUES (NULL, {d_id}, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, ?, 1);''',(None,))
+                                   VALUES (NULL, {d_id}, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ?, 1);''',(None,))
         d_ids_no_infl.sort()
         print(f'Descriptors with missing inflection entries: {count}.', file=output)
         for idx in range(len(d_ids_no_infl)):
@@ -239,6 +239,57 @@ def update_irregular_forms(cursor, logger, output):
 
     print(f'Total irregular forms: {len(irreg_form_rows)}', file=output)
     print (f'{exceptions} exceptions', file=output)
+
+    return True
+
+def one_time_inflection_fix(cursor, logger, output):
+    exceptions = 0
+
+    print ('\t\t***  One-time fix for the inflection table.  ***', file=output)
+    try:
+        d_id_to_hw = {}
+        cursor.execute('''SELECT hw.source, hw.id, d.id, i.id, d.main_symbol, i.is_primary,  i.inflection_type, 
+                          i.accent_type1, i.accent_type2, i.short_form_restrictions, i.past_part_restrictions,  
+                          i.no_short_form, i.no_past_part, i.fleeting_vowel, i.stem_augment, i.second_genitive,  
+                          i.comment, i.is_edited 
+                          FROM headword AS hw 
+                          INNER JOIN descriptor AS d ON d.word_id=hw.id 
+                          INNER JOIN inflection AS i ON i.descriptor_id=d.id
+                          WHERE i.id > 101625 AND i.id < 104688 
+                          ORDER BY main_symbol, hw.source;''')
+        result_rows = cursor.fetchall()
+        for row in result_rows:
+            headword = row[0]
+            hw_id = row[1]
+            descr_id = row[2]
+            infl_id = row[3]
+            main_symbol = row[4]
+            is_primary = row[5]
+            infl_type = row[6]
+            accent_type_1 = row[7]
+            accent_type_2 = row[8]
+            short_form_restrictions = row[9]
+            past_part_restrictions = row[10]
+            no_short_form = row[11]
+            no_past_part = row[12]
+            fleeting_vowel = row[13]
+            stem_augment = row[14]
+            second_genitive = row[15]
+            comment = row[16]
+            is_edited = row[17]
+
+            if is_primary != 1 or infl_type != 0 or accent_type_1 != 0 or accent_type_2 != 0 or short_form_restrictions != 0 \
+                or past_part_restrictions != 1 or no_short_form != 0 or no_past_part != 0 or fleeting_vowel != 0 or \
+                stem_augment != 0 or second_genitive != 0 or comment != None or is_edited != 1:
+                print(f'*** Error: entry {headword}\tdescriptor id = {descr_id}')
+                return
+
+            cursor.execute(f'UPDATE inflection SET past_part_restrictions = 0 WHERE id = {infl_id};')
+
+            print(f'{headword}\t\t\t\t{hw_id}\t{descr_id}\t{infl_id}\t{main_symbol}\t\t{comment}', file=output)
+    except Exception as e:
+        logger.error(f'Exception while retrieving inflection entry: {e}.')
+        sys.exit()
 
     return True
 
