@@ -1,0 +1,21 @@
+#
+# TOML config file for Zal test utilities
+#
+
+title = "Misc. test utilities (Python)"
+
+[paths]
+db_path_windows = 'C:\git-repos\Zal\Zal-Data\ZalData\ZalData_Master.db3'
+output_path_windows = 'C:\git-repos\Zal\Zal-Data\ZalData\TestDataUtils.log'
+lib_path_windows = 'C:\git-repos\Zal\Zal-Core\out\build/x64-debug\ZalPythonItf.dll'
+
+[data]
+add = [
+    "обжечь",
+    "обозвать"
+]
+remove = [
+]
+
+[tests]
+targets = ['']
