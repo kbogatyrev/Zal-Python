@@ -222,9 +222,7 @@ at_to_enum = {AT.AT_NULL: AT_ENUM.AT_NULL,
               AT.AT_F2: AT_ENUM.AT_F2}
 
 no_break_space = u'00a0'
-
-vowels = u'аеёиоуыэюя'
-
+vowels = u'аеёиоуыэюяАЕЁИОУЫЭЮЯ'
 white_space_characters = [u'\t', u' ', u'00a0']
 
 
@@ -531,7 +529,6 @@ def find_first_vowel_offset(word):
 
     return -1
 
-
 def offset_from_syllable_pos(db_cursor, word, pos):
     syllable_count = 0
     for chr in word:
@@ -541,7 +538,6 @@ def offset_from_syllable_pos(db_cursor, word, pos):
                 return syllable_count
 
     return -1
-
 
 '''
 def find_example_section_offset (paragraph):
@@ -561,7 +557,6 @@ def find_example_section_offset (paragraph):
     return -1
 '''
 
-
 def check_circled_digit(paragraph, source_text, paragraph_offset, inflection_group):
     paragraph_offset = offset_to_next_text_segment(paragraph, paragraph_offset)
     if paragraph_offset <= 0 or paragraph_offset >= len(source_text):
@@ -577,7 +572,7 @@ def check_circled_digit(paragraph, source_text, paragraph_offset, inflection_gro
         optional = True
         paragraph_offset += 1
 
-    while source_text[paragraph_offset] in r'\uF0C0\uF0C1\uF0C2\uF0C3\uF0C4\uF0C5\uF0C6\uF0C7\uF0C8':
+    while source_text[paragraph_offset] in '\uF0C0\uF0C1\uF0C2\uF0C3\uF0C4\uF0C5\uF0C6\uF0C7\uF0C8':
         cd_number_int = ord(source_text[paragraph_offset])
         cd_number = (cd_number_int & 0xFF) - 0xBF
         if 0 < cd_number <= 9:
@@ -2231,9 +2226,18 @@ class Descriptor:
             return semicolon, offset_to_next
         else:
             if 'ф.' == extracted:
-                self.last_name_type, self.last_name_inflection_type, self.last_name_accent_type = self.get_last_name_type(source_text, offset_to_next)
+                offset_to_ig, offset_to_next = self.get_last_name_type(source_text, offset_to_next)
+                ig = InflectionGroup(self)
+                current_offset = ig.parse_inflection_group(paragraph, source_text, offset_to_ig)
+                if ig is not None and ig.has_data:
+                    self.inflection_group = ig
+
                 if self.last_name_type == LAST_NAME_TYPE.MILLER:
                     self.inflection_symbol = 'мо'
+                elif self.last_name_type == LAST_NAME_TYPE.TOLSTOY:
+                    self.inflection_symbol = 'п'
+                elif self.last_name_type == LAST_NAME_TYPE.KUZMIN:
+                    self.inflection_symbol = 'мс'
             else:
                 self.inflection_symbol = extracted
                 self.alt_inflection_symbol = extracted_alt_symbol
@@ -2261,25 +2265,37 @@ class Descriptor:
     #  extract_main_symbol
 
     def get_last_name_type(self, source_text, offset):
-        type = LAST_NAME_TYPE.UNDEFINED
-        inflection_type = ''
-        accent_type = ''
+        self.last_name_type = LAST_NAME_TYPE.UNDEFINED
+#        self.last_name_inflection_type = ''
+#        self.last_name_accent_type = ''
+
+        offset_to_inflection = offset
+        offset_to_next = offset
 
         '''
         a)
         Ми́ллер ф. 1а ~ 0
 
         Мужской вариант склоняется как существительное, принадлежащее к модели мо 1а,
-        а женский -- как существительное, принадлежащее к моддели жо 0
+        а женский -- как существительное, принадлежащее к модели жо 0
         '''
-        match = re.match(r'^(\d+)(.+)\s\uF07E\s(.+)', source_text[offset:])
+
+        match = re.match(r'^(\d+)(.+?)\s\uF07E\s(\d+)', source_text[offset:])
         if None != match:
             if match.group(1) is not None and match.group(2) is not None:
-                inflection_type = match.group(1)
-                accent_type = match.group(2)
-                part_three = match.group(3)
+#                inflection_type = match.group(1)
+#                accent_type = match.group(2)
+#                second_part = match.group(3)
 
-                type = LAST_NAME_TYPE.MILLER
+#                ig = InflectionGroup(self)
+#                current_offset = ig.parse_inflection_group(self.paragraph, source_text, offset+match.start(1))
+#                if ig != None and ig.has_data:
+#                    self.inflection_group = ig
+
+#                offset += offset+match.start(1)
+                self.last_name_type = LAST_NAME_TYPE.MILLER
+                offset_to_inflection = offset
+                offset_to_next = offset + match.end(3)
 
         '''
         б) Дано единое обозначение типа склонения -- запись 0 или запись, начинающаяся с <жо
@@ -2289,9 +2305,12 @@ class Descriptor:
         Гли́нка ф. <жо 3*а>
         '''
         if source_text[offset:].startswith('0'):
-            type = LAST_NAME_TYPE.VERDI
+            self.last_name_type = LAST_NAME_TYPE.VERDI
         elif source_text[offset:].startswith('<жо '):
-            type = LAST_NAME_TYPE.GLINKA
+            self.last_name_type = LAST_NAME_TYPE.GLINKA
+            self.inflection_symbol = 'жо'
+            offset_to_next += 1
+            offset_to_inflection += 1
 
         '''
         в) Дано единое обозначение типа склонения -- запись, начинающаяся с <п (это возможно только у
@@ -2304,7 +2323,9 @@ class Descriptor:
         мужского и женского рода прилагательного с данным индексом
         '''
         if source_text[offset:].startswith('<п '):
-            type = LAST_NAME_TYPE.TOLSTOY
+            self.last_name_type = LAST_NAME_TYPE.TOLSTOY
+            offset_to_next += 1
+            offset_to_inflection += 1
 
         '''
         г) Дано единое обозначение типа склонения -- запись, начинающаяся с <мс (это возможно только у
@@ -2314,9 +2335,11 @@ class Descriptor:
         Кузьми́н ф. <мс 1b>
         '''
         if source_text[offset:].startswith('<мс '):
-            type = LAST_NAME_TYPE.KUZMIN
+            self.last_name_type = LAST_NAME_TYPE.KUZMIN
+            offset_to_next += 1
+            offset_to_inflection += 1
 
-        return type, inflection_type, accent_type
+        return offset_to_inflection, offset_to_next
 
 #
 #  Extract inflection type if different from main symbol, e.g., б'абий п <мс 6*а>
@@ -3640,8 +3663,8 @@ if __name__ == "__main__":
     db_cursor = db_connection.cursor()
 
     errors_file = io.open('../Zal-Data/ZalData/conversion_errors_prop_nouns.txt', encoding='utf-16', mode='w')
-#    zal = Document('../Zal-Data/ALL_PRI_TEST.docx')
-    zal = Document('../Zal-Data/Miller.docx')
+    zal = Document('../Zal-Data/ALL_PRI.docx')
+#    zal = Document('../Zal-Data/Filding.docx')
 
 #    out_doc = Document()
 
@@ -3736,12 +3759,18 @@ if __name__ == "__main__":
                 d.part_of_speech = POS.POS_NOUN
                 d.main_symbol = 'мо'
                 d.inflection_symbol = 'мо'
-                d.inflection_group.type = d.last_name_inflection_type
-                d.inflection_group.accent_type_1 = at_to_enum[accent_types[d.last_name_accent_type]]
+#                d.inflection_group.type = d.last_name_inflection_type
+#                try:
+#                    d.inflection_group.accent_type_1 = at_to_enum[accent_types[d.last_name_accent_type]]
+#                except Exception as e:
+#                    print(e)
                 d.save_to_db(db_cursor, headword.last_row_id)
                 d.main_symbol = 'жо'
                 d.inflection_symbol = 'жо'
-                d.inflection_group.type = 0
+                try:
+                    d.inflection_group.type = 0
+                except Exception as e:
+                    print('Exception: %s, %s' % (sys.exc_info()[0], e))
                 d.graphic_stem = d.make_graphic_stem(headword.headword_text)
                 d.save_to_db(db_cursor, headword.last_row_id)
             elif d.last_name_type == LAST_NAME_TYPE.VERDI:
