@@ -630,15 +630,41 @@ def check_plus_sign(paragraph, source_text, paragraph_offset, descriptor):
     if paragraph_offset <= 0 or paragraph_offset >= len(source_text):
         return paragraph_offset
 
-    match = re.match(r'^(\s*\+\s*)(.*)', source_text[paragraph_offset:])
-    if None == match:
+    plus_match = re.match(r'^(\s*\+\s*)(.*)', source_text[paragraph_offset:])
+    if None == plus_match:
         return paragraph_offset
 
 #    if not expect_alt_inflection_group:
 #        warning(db_cursor, u'No comma after main symbol.', paragraph)
     #        return paragraph_offset
 
-    paragraph_offset = paragraph_offset + match.start(2)
+#    headword.__init__()
+    headword.paragraph = paragraph
+
+    hw_offset = 0
+    start_match = re.match(r'^[\uf074\t]*(.*?)', paragraph.text)
+    if start_match != None:
+        if start_match.group(1) != None:
+            hw_offset = start_match.start(1)
+
+    headword.parse_source_data(paragraph, hw_offset, False, False)
+
+    separator_pos = 0
+    for char in paragraph.text:
+        if char in [u'-', u' ']:
+            break
+        separator_pos += 1
+
+    if separator_pos == len(paragraph.text):
+        warning(db_cursor, u'Unable to find separator in an entry with the plus sign.', paragraph)
+        return paragraph_offset
+
+    headword.second_headword.parse_source_data(paragraph, separator_pos+1, False, True)
+    headword.second_headword.paragraph = paragraph
+    headword.second_headword.second_part = True
+#        second_headword.lead_comment = comment
+
+    paragraph_offset = paragraph_offset + plus_match.start(2)
     ig2 = InflectionGroup(descriptor)
     paragraph_offset = ig2.parse_inflection_group(p, source_text, paragraph_offset)
     ig2.multipart = MULTIPART_TYPE_ENUM.BOTH_PARTS_INFLECTED
@@ -1128,7 +1154,6 @@ def check_trailing_comment(paragraph, paragraph_offset, descriptor):
 
     return offset_to_next
 
-
 def extract_stress_marks(source, paragraph):
     shift = 0
     stress_dict = {}
@@ -1269,10 +1294,12 @@ class Headword:
         self.is_edited = False
         self.spryazh_sm = False
         self.second_part = False
+        self.has_second_part = False
+        self.second_headword = None
         return
 
-    def parse_source_data(self, paragraph, offset, is_variant):
-        run_idx = run_index_from_offset(paragraph, offset)
+    def parse_source_data(self, paragraph, paragraph_offset, is_variant, has_second_part):
+        run_idx = run_index_from_offset(paragraph, paragraph_offset)
         if run_idx < 0:
             return -1
 
@@ -1282,27 +1309,41 @@ class Headword:
             if run_idx >= len(paragraph.runs):
                 return -1
 
+        run_offset = 0
         while paragraph.runs[run_idx].bold or len(paragraph.runs[run_idx].text) < 1:
             run_text = paragraph.runs[run_idx].text.strip()
+            found_separator = False
             for char in run_text:
-                if paragraph.runs[run_idx].font.name == 'Antiqua Acc':
-                    source += u'/'
-                elif paragraph.runs[run_idx].font.name == 'Antiqua Pob':
-                    source += u'\\'
-                source += char
+                if paragraph_offset_from_run_offset(paragraph, run_idx, run_offset) >= paragraph_offset:
+                    if paragraph.runs[run_idx].font.name == 'Antiqua Acc':
+                        source += u'/'
+                    elif paragraph.runs[run_idx].font.name == 'Antiqua Pob':
+                        source += u'\\'
+#                    elif has_second_part and char in [u'-', u' ']:
+#                        found_separator = True
+#                        break
+                    source += char
+                run_offset += 1
+
+            if found_separator:
+                break
+
             run_idx += 1
+            run_offset = 0
             if run_idx >= len(paragraph.runs):
                 break
 
             # dash in горно-обогатительный is not bold
             if u'-' == paragraph.runs[run_idx].text:
                 source += paragraph.runs[run_idx].text
+                run_offset = 0
                 run_idx += 1
 
             # space in Золотая Орда is not bold
             if u' ' == paragraph.runs[run_idx].text:
                 if len(paragraph.runs) > run_idx+1 and paragraph.runs[run_idx+1].bold:
                     source += paragraph.runs[run_idx].text
+                    run_offset = 0
                     run_idx += 1
 
         while source.startswith(u'\t'):
@@ -1518,15 +1559,13 @@ class Headword:
 class ProperNoun:
     def __init__(self):
         self.source = ''
-        self.word_id_1 = 0
+        self.word_id = 0
         self.word_id_2 = 0
-        self.connector = ''     # e.g., dash, space etc
-        self.g_pl = False
-        self.spade = False
-        self.tilde = False
-        self.gender_plus = False
-        self.gram_tag = ''
-        self.paragraph = 0
+        self.spade = ''
+        self.is_last_name = False
+        self.has_tilde = False
+        self.g_pl_assumed = False
+        self.has_space_separator = False
         self.comment = ''
 
         return
@@ -1535,18 +1574,18 @@ class ProperNoun:
         try:
             #   We also want to save the raw source text
 
-            params = (self.source,
-                      self.word_id_1,
-                      self.word_id_2,
-                      self.connector,
-                      self.g_pl,
-                      self.spade,
-                      self.tilde,
-                      self.gender_plus,
-                      self.gram_tag,
-                      self.paragraph,
-                      self.comment)
-            db_query = u'INSERT INTO headword VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            params = (self.source,                          # 0
+                      self.word_id,                         # 1
+                      self.word_id_2,                       # 2
+                      self.spade,                           # 3
+                      self.is_last_name,                    # 4
+                      self.has_tilde,                       # 5
+                      self.g_pl_assumed,                    # 6
+                      self.has_space_separator,             # 7
+                      self.comment)                         # 8
+
+            db_query = u'INSERT INTO headword VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                                                    #       0  1  2  3  4  5  6  7  8
             db_cursor.execute(db_query, params)
             self.last_row_id = db_cursor.lastrowid
 
@@ -1794,7 +1833,7 @@ class Descriptor:
         self.last_name_type = LAST_NAME_TYPE.UNDEFINED
         self.last_name_inflection_type = -1
         self.last_name_accent_type = ''
-        self.descriptor_id = -1
+        self.descriptor_id = 0
 
         return
 
@@ -2370,7 +2409,7 @@ class Descriptor:
         return semicolon, offset_to_next
 
     def make_graphic_stem(self, headword_source, second_part=False):
-        #           ^--- (xurda)-murda
+        #                                         ^--- (xurda)-murda
         if len(headword_source) < 1:
             warning(db_cursor, u'Illegal source form.', paragraphs[self.paragraph_index])
             db_connection.commit()
@@ -2464,14 +2503,15 @@ class Descriptor:
 
     # make_graphic_stem()
 
-    def save_to_db(self, db_cursor, headword_id):
+    def save_to_db(self, db_cursor, headword_id, is_second_part = False):
+
         difficult_forms = u''
         missing_forms = u''
 
         try:
             params = (headword_id,  # 1
                       self.graphic_stem,  # 2
-                      self.graphic_stem2,  # 3
+                      self.descriptor_id,  # 3
                       self.variant,  # 4
                       self.main_symbol,  # 5
                       pos_to_enum[self.part_of_speech],  # 6
@@ -2553,13 +2593,13 @@ class Descriptor:
             if self.has_irregular_forms:
                 self.irregular_forms.save_to_db(db_cursor, descriptor_id)
 
-            if self.inflection_group != None and self.inflection_group.has_data:
+            if self.inflection_group != None and not is_second_part and self.inflection_group.has_data:
                 save_inflection_group_to_db(db_cursor, descriptor_id, self, self.inflection_group)
 
             if self.alt_inflection_group != None and self.alt_inflection_group.has_data:
                 save_inflection_group_to_db(db_cursor, descriptor_id, self, self.alt_inflection_group)
 
-            if self.second_inflection_group != None:
+            if is_second_part and self.second_inflection_group != None:
                 save_inflection_group_to_db(db_cursor, descriptor_id, self, self.second_inflection_group)
 
             self.descriptor_id = descriptor_id
@@ -3538,7 +3578,7 @@ def parse_entry(paragraph, paragraph_index, headword, headless):
     headword.paragraph = paragraph
 
     if not headless:
-        run_idx = headword.parse_source_data(paragraph, offset, False)  # not variant
+        run_idx = headword.parse_source_data(paragraph, offset, False, False)  # not variant, not second part
         if run_idx >= len(paragraph.runs):
             return False  # error??
 
@@ -3654,6 +3694,72 @@ def parse_entry(paragraph, paragraph_index, headword, headless):
 
     return True  # parse_entry()
 
+def save_headword(headword):
+    ret = headword.save_to_db(db_cursor)
+    if not ret:
+        return ret
+
+    for pos, is_primary in headword.stress_dict.items():
+        headword.save_stress_pos(db_cursor, pos, is_primary, False)
+
+    for pos, is_primary in headword.variant_stress_dict.items():
+        headword.save_stress_pos(db_cursor, pos, is_primary, True)
+
+    headword.save_homonyms(db_cursor)
+
+# Irrelevant for prop. nouns:
+#    if headword.spryazh_sm:
+#        headwords_with_preverbs.append(headword)
+#        return False        # exit upstream loop
+
+    return True
+
+def handle_last_name(descriptor):
+    if d.last_name_type == LAST_NAME_TYPE.MILLER:
+        descriptor.part_of_speech = POS.POS_NOUN
+        descriptor.main_symbol = 'мо'
+        descriptor.inflection_symbol = 'мо'
+        #                descriptor.inflection_group.type = descriptor.last_name_inflection_type
+        #                try:
+        #                    descriptor.inflection_group.accent_type_1 = at_to_enum[accent_types[descriptor.last_name_accent_type]]
+        #                except Exception as e:
+        #                    print(e)
+        descriptor.save_to_db(db_cursor, headword.last_row_id)
+        descriptor.main_symbol = 'жо'
+        descriptor.inflection_symbol = 'жо'
+        try:
+            descriptor.inflection_group.type = 0
+        except Exception as e:
+            print('Exception: %s, %s' % (sys.exc_info()[0], e))
+            return False
+        descriptor.graphic_stem = d.make_graphic_stem(headword.headword_text)
+        descriptor.save_to_db(db_cursor, headword.last_row_id)
+    elif descriptor.last_name_type == LAST_NAME_TYPE.VERDI:
+        descriptor.part_of_speech = POS.POS_NOUN
+        descriptor.main_symbol = 'мо-жо'
+        descriptor.inflection_symbol = 'мо'
+        descriptor.inflection_group.type = 0
+        descriptor.save_to_db(db_cursor, headword.last_row_id)
+    elif descriptor.last_name_type == LAST_NAME_TYPE.GLINKA:
+        descriptor.part_of_speech = POS.POS_NOUN
+        descriptor.main_symbol = 'мо-жо'
+        descriptor.save_to_db(db_cursor, headword.last_row_id)
+    elif descriptor.last_name_type == LAST_NAME_TYPE.TOLSTOY:
+        descriptor.part_of_speech = POS.POS_ADJ
+        descriptor.main_symbol = 'п'
+        descriptor.save_to_db(db_cursor, headword.last_row_id)
+    elif descriptor.last_name_type == LAST_NAME_TYPE.KUZMIN:
+        descriptor.part_of_speech = POS.POS_NOUN
+        descriptor.main_symbol = 'мо'
+        descriptor.save_to_db(db_cursor, headword.last_row_id)
+        descriptor.main_symbol = 'жо'
+#        descriptor.save_to_db(db_cursor, headword.last_row_id)
+    else:
+        print('Error: last name expected: {descriptor.{graphic_stem}.')
+        return False
+#        descriptor.save_to_db(db_cursor, headword.last_row_id)
+
+    return True
 
 #
 #  Main
@@ -3663,8 +3769,8 @@ if __name__ == "__main__":
     db_cursor = db_connection.cursor()
 
     errors_file = io.open('../Zal-Data/ZalData/conversion_errors_prop_nouns.txt', encoding='utf-16', mode='w')
-    zal = Document('../Zal-Data/ALL_PRI.docx')
-#    zal = Document('../Zal-Data/Filding.docx')
+#    zal = Document('../Zal-Data/ALL_PRI.docx')
+    zal = Document('../Zal-Data/Askaniya.docx')
 
 #    out_doc = Document()
 
@@ -3698,6 +3804,8 @@ if __name__ == "__main__":
 
         if not outer_semicolon:
             headword = Headword()
+            headword.second_headword = Headword()
+            headword.has_second_part = True
         elif headword is None:
             warning(db_cursor, u'No headword instance.', p)
 
@@ -3718,88 +3826,49 @@ if __name__ == "__main__":
 
     print ('Total entries: ' + str(len(dictionary.items())))
 
-    headwords_with_preverbs = []
-    for headword, descriptors in dictionary.items():
-        ret = headword.save_to_db(db_cursor)
-        if not ret:
-            continue
-
-        for pos, is_primary in headword.stress_dict.items():
-            headword.save_stress_pos(db_cursor, pos, is_primary, False)
-
-        for pos, is_primary in headword.variant_stress_dict.items():
-            headword.save_stress_pos(db_cursor, pos, is_primary, True)
-
-        headword.save_homonyms(db_cursor)
-
-        if headword.spryazh_sm:
-            headwords_with_preverbs.append(headword)
-            continue
-
-        descriptors = dictionary[headword]
-        for d in descriptors:
-            if d.second_inflection_group:
+#    headwords_with_preverbs = []
+    for headword, descriptor in dictionary.items():
+        if headword.has_second_part:
+            ret = save_headword(headword.second_headword)
+            if not ret:
+                continue
+            descriptors = dictionary[headword]
+            for d in descriptors:
                 dash_offset = headword.headword_text.find('-')
                 if dash_offset < 1 or dash_offset >= len(headword.headword_text) - 1:
                     warning(db_cursor, u'Missing or misplaced dash in a two-part compound', p)
                     continue
 
                 # special case: xurda-murda
-                left = headword.headword_text[0:dash_offset]
-                d.graphic_stem = d.make_graphic_stem(left)
                 right = headword.headword_text[dash_offset + 1:]
                 is_second_part = True
-                d.graphic_stem2 = d.make_graphic_stem(right, is_second_part)
+                d.graphic_stem = d.make_graphic_stem(right, is_second_part)
+                d.save_to_db(db_cursor, headword.second_headword.last_row_id, True)
+                                                                              # ^-- 2nd part
 
-            # normal processing
+        ret = save_headword(headword)
+        if not ret:
+            continue
+        descriptors = dictionary[headword]
+        for d in descriptors:
+            if headword.has_second_part:
+                dash_offset = headword.headword_text.find('-')
+                if dash_offset < 1 or dash_offset >= len(headword.headword_text) - 1:
+                    warning(db_cursor, u'Missing or misplaced dash in a two-part compound', p)
+                    continue
+                left = headword.headword_text[0:dash_offset]
+                d.graphic_stem = d.make_graphic_stem(left)
             else:
                 d.graphic_stem = d.make_graphic_stem(headword.headword_text)
+            if d.last_name_type != LAST_NAME_TYPE.UNDEFINED:
+                handle_last_name(d)
+            d.save_to_db(db_cursor, headword.last_row_id)
 
-            if d.last_name_type == LAST_NAME_TYPE.MILLER:
-                d.part_of_speech = POS.POS_NOUN
-                d.main_symbol = 'мо'
-                d.inflection_symbol = 'мо'
-#                d.inflection_group.type = d.last_name_inflection_type
-#                try:
-#                    d.inflection_group.accent_type_1 = at_to_enum[accent_types[d.last_name_accent_type]]
-#                except Exception as e:
-#                    print(e)
-                d.save_to_db(db_cursor, headword.last_row_id)
-                d.main_symbol = 'жо'
-                d.inflection_symbol = 'жо'
-                try:
-                    d.inflection_group.type = 0
-                except Exception as e:
-                    print('Exception: %s, %s' % (sys.exc_info()[0], e))
-                d.graphic_stem = d.make_graphic_stem(headword.headword_text)
-                d.save_to_db(db_cursor, headword.last_row_id)
-            elif d.last_name_type == LAST_NAME_TYPE.VERDI:
-                d.part_of_speech = POS.POS_NOUN
-                d.main_symbol = 'мо-жо'
-                d.inflection_symbol = 'мо'
-                d.inflection_group.type = 0
-                d.save_to_db(db_cursor, headword.last_row_id)
-            elif d.last_name_type == LAST_NAME_TYPE.GLINKA:
-                d.part_of_speech = POS.POS_NOUN
-                d.main_symbol = 'мо-жо'
-                d.save_to_db(db_cursor, headword.last_row_id)
-            elif d.last_name_type == LAST_NAME_TYPE.TOLSTOY:
-                d.part_of_speech = POS.POS_ADJ
-                d.main_symbol = 'п'
-                d.save_to_db(db_cursor, headword.last_row_id)
-            elif d.last_name_type == LAST_NAME_TYPE.KUZMIN:
-                d.part_of_speech = POS.POS_NOUN
-                d.main_symbol = 'мо'
-                d.save_to_db(db_cursor, headword.last_row_id)
-                d.main_symbol = 'жо'
-                d.save_to_db(db_cursor, headword.last_row_id)
-            else:
-                d.save_to_db(db_cursor, headword.last_row_id)
-
-    for headword in headwords_with_preverbs:
-        params = (headword.last_row_id, dictionary[headword][0].descriptor_id)
-        db_query = u'INSERT INTO spryazh_sm_headwords VALUES (NULL, ?, ?)'
-        db_cursor.execute(db_query, params)
+# Irrelevant for prop. nouns
+#    for headword in headwords_with_preverbs:
+#        params = (headword.last_row_id, dictionary[headword][0].descriptor_id)
+#        db_query = u'INSERT INTO spryazh_sm_headwords VALUES (NULL, ?, ?)'
+#        db_cursor.execute(db_query, params)
 
     db_connection.commit()
     db_cursor.close()
