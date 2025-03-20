@@ -639,7 +639,7 @@ def check_plus_sign(paragraph, source_text, paragraph_offset, descriptor):
     #        return paragraph_offset
 
 #    headword.__init__()
-    headword.paragraph = paragraph
+#    headword.paragraph = paragraph
 
     hw_offset = 0
     start_match = re.match(r'^[\uf074\t]*(.*?)', paragraph.text)
@@ -647,7 +647,7 @@ def check_plus_sign(paragraph, source_text, paragraph_offset, descriptor):
         if start_match.group(1) != None:
             hw_offset = start_match.start(1)
 
-    headword.parse_source_data(paragraph, hw_offset, False, False)
+#    headword.parse_source_data(paragraph, hw_offset, False, False)
 
     separator_pos = 0
     for char in paragraph.text:
@@ -659,18 +659,28 @@ def check_plus_sign(paragraph, source_text, paragraph_offset, descriptor):
         warning(db_cursor, u'Unable to find separator in an entry with the plus sign.', paragraph)
         return paragraph_offset
 
+    headword.has_second_part = True
     headword.second_headword.parse_source_data(paragraph, separator_pos+1, False, True)
     headword.second_headword.paragraph = paragraph
     headword.second_headword.second_part = True
 #        second_headword.lead_comment = comment
 
     paragraph_offset = paragraph_offset + plus_match.start(2)
-    ig2 = InflectionGroup(descriptor)
+    second_descriptor = Descriptor(paragraph)
+    second_descriptor = descriptor.copy()
+    second_descriptor.is_second_part = True
+    s, paragraph_offset = second_descriptor.check_angle_brackets(paragraph, paragraph.text, paragraph_offset)
+    #    if s:
+    #        source = source[:self.semicolon_offset]
+    #        semicolon = True
+
+    ig2 = InflectionGroup(second_descriptor)
     paragraph_offset = ig2.parse_inflection_group(p, source_text, paragraph_offset)
     ig2.multipart = MULTIPART_TYPE_ENUM.BOTH_PARTS_INFLECTED
     ig2.is_second_part = True
     if ig2 != None:
-        descriptor.second_inflection_group = ig2
+        second_descriptor.second_inflection_group = ig2
+    dictionary[headword].append(second_descriptor)
 
 #    descriptor.inflection_group.multipart = 2
 
@@ -1298,7 +1308,7 @@ class Headword:
         self.second_headword = None
         return
 
-    def parse_source_data(self, paragraph, paragraph_offset, is_variant, has_second_part):
+    def parse_source_data(self, paragraph, paragraph_offset, is_variant, has_second_part=False):
         run_idx = run_index_from_offset(paragraph, paragraph_offset)
         if run_idx < 0:
             return -1
@@ -1828,6 +1838,7 @@ class Descriptor:
         #        self.sharp = -1                 #  number after #, redundant, see "section"
         self.trailing_comment = ''
         self.semicolon_offset = -1
+        self.is_second_part = False
         self.is_secondary = False  # after semicolon:   выходной	п	1b; м (выходной день)
         self.is_last_name = False
         self.last_name_type = LAST_NAME_TYPE.UNDEFINED
@@ -1912,6 +1923,7 @@ class Descriptor:
         copy.trailing_comment = self.trailing_comment
         copy.semicolon_offset = self.semicolon_offset
         copy.is_secondary = self.is_secondary
+        copy.is_second_part = self.is_second_part
         copy.is_last_name = self.is_last_name
         copy.last_name_type = self.last_name_type
 
@@ -2507,6 +2519,7 @@ class Descriptor:
 
         difficult_forms = u''
         missing_forms = u''
+        descriptor_id = 0
 
         try:
             params = (headword_id,  # 1
@@ -2612,6 +2625,7 @@ class Descriptor:
         except Exception as e:
             print('Exception: %s, %s' % (sys.exc_info()[0], e))
 
+        return descriptor_id
 
 # class Descriptor
 
@@ -3769,8 +3783,8 @@ if __name__ == "__main__":
     db_cursor = db_connection.cursor()
 
     errors_file = io.open('../Zal-Data/ZalData/conversion_errors_prop_nouns.txt', encoding='utf-16', mode='w')
-#    zal = Document('../Zal-Data/ALL_PRI.docx')
-    zal = Document('../Zal-Data/Askaniya.docx')
+    zal = Document('../Zal-Data/ALL_PRI.docx')
+#    zal = Document('../Zal-Data/Askaniya.docx')
 
 #    out_doc = Document()
 
@@ -3805,7 +3819,6 @@ if __name__ == "__main__":
         if not outer_semicolon:
             headword = Headword()
             headword.second_headword = Headword()
-            headword.has_second_part = True
         elif headword is None:
             warning(db_cursor, u'No headword instance.', p)
 
@@ -3828,36 +3841,44 @@ if __name__ == "__main__":
 
 #    headwords_with_preverbs = []
     for headword, descriptor in dictionary.items():
+        row_id = 0
         if headword.has_second_part:
+            # special case: xurda-murda
             ret = save_headword(headword.second_headword)
             if not ret:
                 continue
             descriptors = dictionary[headword]
             for d in descriptors:
+                if not d.is_second_part:
+                    continue
                 dash_offset = headword.headword_text.find('-')
                 if dash_offset < 1 or dash_offset >= len(headword.headword_text) - 1:
-                    warning(db_cursor, u'Missing or misplaced dash in a two-part compound', p)
-                    continue
-
-                # special case: xurda-murda
+                    dash_offset = headword.headword_text.find(' ')
+                    if dash_offset < 1 or dash_offset >= len(headword.headword_text) - 1:
+                        warning(db_cursor, u'Missing or misplaced dash in a two-part compound', p)
+                        continue
                 right = headword.headword_text[dash_offset + 1:]
                 is_second_part = True
                 d.graphic_stem = d.make_graphic_stem(right, is_second_part)
-                d.save_to_db(db_cursor, headword.second_headword.last_row_id, True)
-                                                                              # ^-- 2nd part
-
+                row_id = d.save_to_db(db_cursor, headword.second_headword.last_row_id, True)
+                                                                                # ^-- 2nd part
         ret = save_headword(headword)
         if not ret:
             continue
         descriptors = dictionary[headword]
         for d in descriptors:
+            if d.is_second_part:
+                continue
             if headword.has_second_part:
                 dash_offset = headword.headword_text.find('-')
                 if dash_offset < 1 or dash_offset >= len(headword.headword_text) - 1:
-                    warning(db_cursor, u'Missing or misplaced dash in a two-part compound', p)
-                    continue
+                    dash_offset = headword.headword_text.find(' ')
+                    if dash_offset < 1 or dash_offset >= len(headword.headword_text) - 1:
+                        warning(db_cursor, u'Missing or misplaced dash in a two-part compound', p)
+                        continue
                 left = headword.headword_text[0:dash_offset]
                 d.graphic_stem = d.make_graphic_stem(left)
+                d.descriptor_id = row_id
             else:
                 d.graphic_stem = d.make_graphic_stem(headword.headword_text)
             if d.last_name_type != LAST_NAME_TYPE.UNDEFINED:
