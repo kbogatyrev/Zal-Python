@@ -669,6 +669,7 @@ def check_plus_sign(paragraph, source_text, paragraph_offset, descriptor):
     second_descriptor = Descriptor(paragraph)
     second_descriptor = descriptor.copy()
     second_descriptor.is_second_part = True
+    descriptor.has_second_part = True
     s, paragraph_offset = second_descriptor.check_angle_brackets(paragraph, paragraph.text, paragraph_offset)
     #    if s:
     #        source = source[:self.semicolon_offset]
@@ -1838,6 +1839,7 @@ class Descriptor:
         #        self.sharp = -1                 #  number after #, redundant, see "section"
         self.trailing_comment = ''
         self.semicolon_offset = -1
+        self.has_second_part = False
         self.is_second_part = False
         self.is_secondary = False  # after semicolon:   выходной	п	1b; м (выходной день)
         self.is_last_name = False
@@ -1845,6 +1847,7 @@ class Descriptor:
         self.last_name_inflection_type = -1
         self.last_name_accent_type = ''
         self.descriptor_id = 0
+        self.last_descriptor_id = 0
 
         return
 
@@ -1922,6 +1925,7 @@ class Descriptor:
 
         copy.trailing_comment = self.trailing_comment
         copy.semicolon_offset = self.semicolon_offset
+        copy.has_second_part = self.has_second_part
         copy.is_secondary = self.is_secondary
         copy.is_second_part = self.is_second_part
         copy.is_last_name = self.is_last_name
@@ -2515,16 +2519,23 @@ class Descriptor:
 
     # make_graphic_stem()
 
-    def save_to_db(self, db_cursor, headword_id, is_second_part = False):
+    def save_to_db(self, db_cursor, headword_id, is_second_part = False, last_descriptor_id = 0):
 
         difficult_forms = u''
         missing_forms = u''
-        descriptor_id = 0
+
+        second_part_id = 0
+        if self.has_second_part:
+            if is_second_part:
+                warning(db_cursor, u'Conflicting second part values.', self.paragraph)
+                return
+            second_part_id = self.last_descriptor_id
 
         try:
             params = (headword_id,  # 1
                       self.graphic_stem,  # 2
-                      self.descriptor_id,  # 3
+#                      self.descriptor_id,  # 3
+                      second_part_id,   # 3
                       self.variant,  # 4
                       self.main_symbol,  # 5
                       pos_to_enum[self.part_of_speech],  # 6
@@ -2563,10 +2574,10 @@ class Descriptor:
             #                                                 1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36
             db_cursor.execute(db_query, params)
 
-            descriptor_id = db_cursor.lastrowid
+            self.last_descriptor_id = db_cursor.lastrowid
 
             if self.loc2:
-                params = (descriptor_id,
+                params = (self.last_descriptor_id,
                           self.loc2_optional,
                           self.loc2_preposition,
                           False)
@@ -2575,47 +2586,45 @@ class Descriptor:
                 db_cursor.execute(db_query, params)
 
             if self.gen2:
-                params = (descriptor_id, False)
+                params = (self.last_descriptor_id, False)
 
                 db_query = u'INSERT INTO second_genitive VALUES (NULL, ?, ?)'
                 db_cursor.execute(db_query, params)
 
             if self.has_aspect_pair:
                 params = (
-                descriptor_id, self.aspect_pair_type, self.aspect_pair_data, False, self.aspect_pair_comment, False)
+                self.descriptor_id, self.aspect_pair_type, self.aspect_pair_data, False, self.aspect_pair_comment, False)
                 db_query = u'INSERT INTO aspect_pair VALUES (NULL, ?, ?, ?, ?, ?, ?)'
                 db_cursor.execute(db_query, params)
 
                 if self.aspect_alt_pair_type != 0:
-                    params = (descriptor_id, self.aspect_alt_pair_type, self.aspect_alt_pair_data, True,
+                    params = (self.descriptor_id, self.aspect_alt_pair_type, self.aspect_alt_pair_data, True,
                               self.aspect_alt_pair_comment, False)
                     db_cursor.execute(db_query, params)
 
             if self.has_difficult_forms:
                 for item in self.difficult_forms:
-                    params = (descriptor_id, item)
+                    params = (self.descriptor_id, item)
                     db_query = u'INSERT INTO difficult_forms VALUES (NULL, ?, ?)'
                     db_cursor.execute(db_query, params)
 
             if self.has_missing_forms:
                 for item in self.missing_forms:
-                    params = (descriptor_id, item)
+                    params = (self.descriptor_id, item)
                     db_query = u'INSERT INTO missing_forms VALUES (NULL, ?, ?)'
                     db_cursor.execute(db_query, params)
 
             if self.has_irregular_forms:
-                self.irregular_forms.save_to_db(db_cursor, descriptor_id)
+                self.irregular_forms.save_to_db(db_cursor, self.descriptor_id)
 
             if self.inflection_group != None and not is_second_part and self.inflection_group.has_data:
-                save_inflection_group_to_db(db_cursor, descriptor_id, self, self.inflection_group)
+                save_inflection_group_to_db(db_cursor, self.last_descriptor_id, self, self.inflection_group)
 
             if self.alt_inflection_group != None and self.alt_inflection_group.has_data:
-                save_inflection_group_to_db(db_cursor, descriptor_id, self, self.alt_inflection_group)
+                save_inflection_group_to_db(db_cursor, self.last_descriptor_id, self, self.alt_inflection_group)
 
             if is_second_part and self.second_inflection_group != None:
-                save_inflection_group_to_db(db_cursor, descriptor_id, self, self.second_inflection_group)
-
-            self.descriptor_id = descriptor_id
+                save_inflection_group_to_db(db_cursor, self.last_descriptor_id, self, self.second_inflection_group)
 
         except IOError as io_ex:
             print('IO Error.', io_ex.args[0])
@@ -2624,8 +2633,6 @@ class Descriptor:
             self.last_row_id = db_cursor.lastrowid
         except Exception as e:
             print('Exception: %s, %s' % (sys.exc_info()[0], e))
-
-        return descriptor_id
 
 # class Descriptor
 
@@ -3841,7 +3848,7 @@ if __name__ == "__main__":
 
 #    headwords_with_preverbs = []
     for headword, descriptor in dictionary.items():
-        row_id = 0
+        last_descriptor_id = 0;
         if headword.has_second_part:
             # special case: xurda-murda
             ret = save_headword(headword.second_headword)
@@ -3860,8 +3867,9 @@ if __name__ == "__main__":
                 right = headword.headword_text[dash_offset + 1:]
                 is_second_part = True
                 d.graphic_stem = d.make_graphic_stem(right, is_second_part)
-                row_id = d.save_to_db(db_cursor, headword.second_headword.last_row_id, True)
+                d.save_to_db(db_cursor, headword.second_headword.last_row_id, True)
                                                                                 # ^-- 2nd part
+                last_descriptor_id = d.last_descriptor_id
         ret = save_headword(headword)
         if not ret:
             continue
@@ -3869,6 +3877,7 @@ if __name__ == "__main__":
         for d in descriptors:
             if d.is_second_part:
                 continue
+            d.last_descriptor_id = last_descriptor_id
             if headword.has_second_part:
                 dash_offset = headword.headword_text.find('-')
                 if dash_offset < 1 or dash_offset >= len(headword.headword_text) - 1:
@@ -3878,12 +3887,12 @@ if __name__ == "__main__":
                         continue
                 left = headword.headword_text[0:dash_offset]
                 d.graphic_stem = d.make_graphic_stem(left)
-                d.descriptor_id = row_id
             else:
                 d.graphic_stem = d.make_graphic_stem(headword.headword_text)
             if d.last_name_type != LAST_NAME_TYPE.UNDEFINED:
                 handle_last_name(d)
-            d.save_to_db(db_cursor, headword.last_row_id)
+            else:
+                d.save_to_db(db_cursor, headword.last_row_id)
 
 # Irrelevant for prop. nouns
 #    for headword in headwords_with_preverbs:
