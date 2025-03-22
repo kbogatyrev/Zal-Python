@@ -1322,7 +1322,8 @@ class Headword:
 
         run_offset = 0
         while paragraph.runs[run_idx].bold or len(paragraph.runs[run_idx].text) < 1:
-            run_text = paragraph.runs[run_idx].text.strip()
+#            run_text = paragraph.runs[run_idx].text.strip()
+            run_text = paragraph.runs[run_idx].text
             found_separator = False
             for char in run_text:
                 if paragraph_offset_from_run_offset(paragraph, run_idx, run_offset) >= paragraph_offset:
@@ -2361,7 +2362,7 @@ class Descriptor:
         '''
         if source_text[offset:].startswith('0'):
             self.last_name_type = LAST_NAME_TYPE.VERDI
-        elif source_text[offset:].startswith('<жо '):
+        elif source_text[offset:].startswith('<жо'):
             self.last_name_type = LAST_NAME_TYPE.GLINKA
             self.inflection_symbol = 'жо'
             offset_to_next += 1
@@ -3587,6 +3588,7 @@ def parse_entry(paragraph, paragraph_index, headword, headless):
 
     offset = 0
     match = re.match(r'^[\uf074\t]*(.*?)', paragraph.text)
+
     if match != None:
         if match.group(1) != None:
             offset = match.start(1)
