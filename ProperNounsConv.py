@@ -1847,6 +1847,7 @@ class Descriptor:
         self.last_name_type = LAST_NAME_TYPE.UNDEFINED
         self.last_name_inflection_type = -1
         self.last_name_accent_type = ''
+        self.opposite_gender = False     # superscript "+"
         self.descriptor_id = 0
         self.last_descriptor_id = 0
 
@@ -1931,6 +1932,7 @@ class Descriptor:
         copy.is_second_part = self.is_second_part
         copy.is_last_name = self.is_last_name
         copy.last_name_type = self.last_name_type
+        copy.opposite_gender = self.opposite_gender
 
         return copy
 
@@ -2195,7 +2197,7 @@ class Descriptor:
             return False, False, -1
 
         m_source = re.match(
-            r'[абвгдеёжзийклмнопрстуфхцчшщъыьэюя\.\-]+([\t ;:])[абвгдеёжзийклмнопрстуфхцчшщъыьэюя\.\-]*',
+            r'[абвгдеёжзийклмнопрстуфхцчшщъыьэюя\.\-]+([\t ;:+])[абвгдеёжзийклмнопрстуфхцчшщъыьэюя\.\-]*',
             source_text[start_offset:])
         if None == m_source:
             source = source_text[start_offset:]
@@ -2206,6 +2208,11 @@ class Descriptor:
             offset_to_next = chars_to_extract
 
             separator = m_source.group(1)
+            if u'+' == separator:
+                run_idx = run_index_from_offset(paragraph, start_offset+m_source.start(1))
+                if paragraph.runs[run_idx].font.size.pt == 6.0:
+                    self.opposite_gender = True
+
             if u';' == separator:
                 self.semicolon_offset = start_offset + m_source.start(1)
                 semicolon = True
@@ -3794,7 +3801,7 @@ if __name__ == "__main__":
 
     errors_file = io.open('../Zal-Data/ZalData/conversion_errors_prop_nouns.txt', encoding='utf-16', mode='w')
     zal = Document('../Zal-Data/ALL_PRI.docx')
-#    zal = Document('../Zal-Data/Asti.docx')
+#    zal = Document('../Zal-Data/Galka.docx')
 
 #    out_doc = Document()
 
