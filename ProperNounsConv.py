@@ -2046,8 +2046,9 @@ class Descriptor:
         section_match = re.match(r'(.*?\, § (\d+))', source[current_offset:])
         if (None != section_match):
             section_num = int(section_match.group(2))
-            if not section_num in [7, 8, 9, 10, 11, 12, 13, 14, 15]:
-                warning(db_cursor, u'Unexpected section number: must be between 7 and 10.', paragraph)
+#            if not section_num in [7, 8, 9, 10, 11, 12, 13, 14, 15]:
+            if (section_num < 19 or section_num > 30):
+                warning(db_cursor, u'Unexpected section number: must be between 19 and 30.', paragraph)
             else:
                 self.section = section_num
 
@@ -2069,11 +2070,11 @@ class Descriptor:
             section_match = re.match(r'(.*?\, § (\d+))', source[current_offset:])
             if (None != section_match):
                 section_num = int(section_match.group(2))
-                if section_num != 11:
-                    warning(db_cursor, u'Unexpected section number: must be 11.', paragraph)
-                else:
-                    self.section = section_num
-                    current_offset += len(section_match.group(0))
+#                if section_num != 11:
+#                    warning(db_cursor, u'Unexpected section number: must be 11.', paragraph)
+#                else:
+                self.section = section_num
+                current_offset += len(section_match.group(0))
             else:
                 current_offset = current_offset + 1
 
@@ -2246,8 +2247,10 @@ class Descriptor:
             separator = m_next.group(1)
 
             if u'/' == separator:
-                if source.startswith(u'/ '):  # ж// жо, 1st forward slash already counted
-                    alt_offset = offset_to_next + 2
+#                if source.startswith(u'/ '):  # ж// жо, 1st forward slash already counted
+                if source.startswith(u'/'):  # ж//жо, 1st forward slash already counted
+#                    alt_offset = offset_to_next + 2
+                    alt_offset = offset_to_next + 1
                     m_alt = re.match(
                         r'[абвгдеёжзийклмнопрстуфхцчшщъыьэюя\.\-]+([,;])([^абвгдеёжзийклмнопрстуфхцчшщъыьэюя\.\-])',
                         source_text[alt_offset:])
@@ -2271,14 +2274,11 @@ class Descriptor:
 
         #        extracted_alt_symbol = extracted
         if len(extracted) >= 3 and u'§' == extracted[0]:
-            if u'§ 1' == extracted[0:3]:
-                self.section = 1
-                offset_to_next = start_offset + 3
-            elif u'§ 2' == extracted[0:3]:
-                self.section = 2
-                offset_to_next = start_offset + 3
+            section_num = int(extracted[0:3])
+            if section_num < 19 or section_num > 30:
+                warning(db_cursor, u'Unexpected section number: must be between 19 and 30.', paragraph)
             else:
-                warning(db_cursor, u'Unexpected section number.', paragraph)
+                self.section = section_num
             return semicolon, offset_to_next
         else:
             if 'ф.' == extracted:
@@ -2417,8 +2417,9 @@ class Descriptor:
         section_match = re.match(r'(<(.+?)>)\, § (\d+)', source_text[start_offset:])
         if (None != section_match):
             section_num = int(section_match.group(3))
-            if not section_num in [3, 4, 5, 6, 11, 12]:
-                warning(db_cursor, u'Unexpected section number: must be between 3 and 6.', paragraph)
+#            if not section_num in [3, 4, 5, 6, 11, 12]:
+            if section_num < 19 or section_num > 30:
+                warning(db_cursor, u'Unexpected section number: must be between 19 and 30.', paragraph)
             else:
                 self.section = section_num
         #                offset_to_next = start_offset + len(section_match.group(0))
@@ -3793,7 +3794,7 @@ if __name__ == "__main__":
 
     errors_file = io.open('../Zal-Data/ZalData/conversion_errors_prop_nouns.txt', encoding='utf-16', mode='w')
     zal = Document('../Zal-Data/ALL_PRI.docx')
-#    zal = Document('../Zal-Data/Askaniya.docx')
+#    zal = Document('../Zal-Data/Asti.docx')
 
 #    out_doc = Document()
 
