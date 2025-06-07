@@ -625,6 +625,9 @@ def check_cognates(paragraph, source_text, paragraph_offset, descriptor):
 
 
 def check_plus_sign(paragraph, source_text, paragraph_offset, descriptor):
+
+    global inflection_offset
+
     descriptor.second_inflection_group = None
 
     if paragraph_offset <= 0 or paragraph_offset >= len(source_text):
@@ -675,6 +678,7 @@ def check_plus_sign(paragraph, source_text, paragraph_offset, descriptor):
     #        source = source[:self.semicolon_offset]
     #        semicolon = True
 
+    inflection_offset = paragraph_offset
     ig2 = InflectionGroup(second_descriptor)
     paragraph_offset = ig2.parse_inflection_group(p, source_text, paragraph_offset)
     ig2.multipart = MULTIPART_TYPE_ENUM.BOTH_PARTS_INFLECTED
@@ -782,7 +786,6 @@ def check_spade(paragraph, source_text, paragraph_offset, descriptor):
     #    paragraph_offset = p.text.rfind(u'(', 0, offset-1)
     if -1 == source_text.find(u'\uF0AB'):
         return paragraph_offset
-
     return paragraph_offset
 
 
@@ -1116,7 +1119,7 @@ def check_square_brackets(paragraph, paragraph_offset, descriptor):
     next = get_next_segment(paragraph, offset)
     if len(next) > 0:
         if next in main_symbols:
-            semicolon, offset = variant_descriptor.parse_descriptor(paragraph, offset, False, True)
+            semicolon, offset = variant_descriptor.parse_descriptor(paragraph, None, offset, False, True)
             if semicolon:
                 warning(db_cursor, u'Unexpected semicolon inside square brackets.', paragraph)
                 return offset
@@ -1633,6 +1636,25 @@ class InflectionGroup:
 
         return
 
+    def copy(self):
+        copy = InflectionGroup(self.descriptor)
+        copy.has_data = self.has_data
+        copy.multipart = self.multipart
+        copy.is_second_part = self.is_second_part
+        copy.type = self.type
+        copy.accent_type_1 = self.accent_type_1
+        copy.accent_type_2 = self.accent_type_2
+        copy.x_mark = self.x_mark
+        copy.boxed_x_mark = self.boxed_x_mark
+        copy.fleeting_vowel = self.fleeting_vowel
+        copy.stem_augment_type = self.stem_augment_type
+        copy.comment = self.comment
+        copy.common_deviations = self.common_deviations
+        copy.descriptor = self.descriptor
+        copy.multipart = self.multipart
+
+        return copy
+
     #
     #  Parse source data
     #
@@ -1936,7 +1958,7 @@ class Descriptor:
 
         return copy
 
-    def parse_descriptor(self, paragraph, source_offset, inflection_type_mismatch, is_variant):
+    def parse_descriptor(self, paragraph, main_descriptor, source_offset, inflection_type_mismatch, is_variant):
 
         #        run_idx = start_run_idx
         #        if paragraph.runs[run_idx].bold or paragraph.runs[run_idx].italic:
@@ -1954,6 +1976,8 @@ class Descriptor:
         #        if semicolon:
         #            after_semicolon = True
 
+        global inflection_offset
+
         semicolon = False
 
         #        if None == source or '' == source:
@@ -1970,7 +1994,8 @@ class Descriptor:
             return semicolon, -1
 
         source = paragraph.text
-        semicolon, current_offset = self.extract_main_symbol(paragraph, source, start_offset, False)
+        semicolon, current_offset = self.extract_main_symbol(paragraph, source, start_offset, False, main_descriptor)
+
         if self.main_symbol == 'п':
             match = re.match(r'\s+\+\s+(.+)', source[current_offset-1:])
             if match != None:
@@ -2040,6 +2065,7 @@ class Descriptor:
         if current_offset < 1:
             return semicolon, current_offset
 
+        inflection_offset = current_offset
         ig = InflectionGroup(self)
         current_offset = ig.parse_inflection_group(paragraph, source, current_offset)
         if ig != None and ig.has_data:
@@ -2058,6 +2084,7 @@ class Descriptor:
 
         if source[current_offset:current_offset + 2] == r'//':
             current_offset += 2
+            inflection_offset = current_offset
             alt_ig = InflectionGroup(self)
             current_offset = alt_ig.parse_inflection_group(paragraph, source, current_offset)
             if alt_ig != None:
@@ -2185,7 +2212,9 @@ class Descriptor:
     #
     #  Assemble and identify main symbol
     #
-    def extract_main_symbol(self, paragraph, source_text, start_offset, inflection_type_mismatch):
+    def extract_main_symbol(self, paragraph, source_text, start_offset, inflection_type_mismatch, main_descriptor):
+
+        global inflection_offset
 
         current_offset = start_offset
         semicolon = False
@@ -2289,18 +2318,22 @@ class Descriptor:
             return semicolon, offset_to_next
         else:
             if 'ф.' == extracted:
-                offset_to_ig, offset_to_next = self.get_last_name_type(source_text, offset_to_next)
-                ig = InflectionGroup(self)
-                current_offset = ig.parse_inflection_group(paragraph, source_text, offset_to_ig)
-                if ig is not None and ig.has_data:
-                    self.inflection_group = ig
+                if self.is_secondary and inflection_offset > -1:
+                    self.get_secondary_last_name_type(main_descriptor)
+                    self.inflection_group = main_descriptor.inflection_group.copy()
+                else:
+                    offset_to_ig, offset_to_next = self.get_last_name_type(source_text, offset_to_next)
+                    ig = InflectionGroup(self)
+                    current_offset = ig.parse_inflection_group(paragraph, source_text, offset_to_ig)
+                    if ig is not None and ig.has_data:
+                        self.inflection_group = ig
 
-                if self.last_name_type == LAST_NAME_TYPE.MILLER:
-                    self.inflection_symbol = 'мо'
-                elif self.last_name_type == LAST_NAME_TYPE.TOLSTOY:
-                    self.inflection_symbol = 'п'
-                elif self.last_name_type == LAST_NAME_TYPE.KUZMIN:
-                    self.inflection_symbol = 'мс'
+                    if self.last_name_type == LAST_NAME_TYPE.MILLER:
+                        self.inflection_symbol = 'мо'
+                    elif self.last_name_type == LAST_NAME_TYPE.TOLSTOY:
+                        self.inflection_symbol = 'п'
+                    elif self.last_name_type == LAST_NAME_TYPE.KUZMIN:
+                        self.inflection_symbol = 'мс'
             else:
                 self.inflection_symbol = extracted
                 self.alt_inflection_symbol = extracted_alt_symbol
@@ -2336,14 +2369,14 @@ class Descriptor:
         offset_to_next = offset
 
         '''
-        a)
-        Ми́ллер ф. 1а ~ 0
+        a) Ми́ллер ф. 1а ~ 0
 
         Мужской вариант склоняется как существительное, принадлежащее к модели мо 1а,
         а женский -- как существительное, принадлежащее к модели жо 0
         '''
 
         match = re.match(r'^(\d+)(.+?)\s\uF07E\s(\d+)', source_text[offset:])
+        #                                         ^-- tilde
         if None != match:
             if match.group(1) is not None and match.group(2) is not None:
 #                inflection_type = match.group(1)
@@ -2404,6 +2437,23 @@ class Descriptor:
 
         return offset_to_inflection, offset_to_next
 
+    def get_secondary_last_name_type(self, primary_descriptor):
+        self.last_name_type = LAST_NAME_TYPE.UNDEFINED
+
+        if not primary_descriptor:
+            warning(db_cursor, u'No primary descriptor supplied.', self.paragraph)
+            return
+
+        if 'мо' == primary_descriptor.main_symbol and \
+            primary_descriptor.inflection_symbol == primary_descriptor.main_symbol:         # doesn't seem to happen with other types
+            self.last_name_type = LAST_NAME_TYPE.MILLER
+        elif primary_descriptor.inflection_symbol != primary_descriptor.main_symbol:
+            kiki = True
+        elif 0 == primary_descriptor.inflection_group.type:
+            self.last_name_type = LAST_NAME_TYPE.VERDI
+
+        return
+
 #
 #  Extract inflection type if different from main symbol, e.g., б'абий п <мс 6*а>
 #
@@ -2419,7 +2469,7 @@ class Descriptor:
 
         alt_main_symb_offset = start_offset + match.start(2)
 
-        semicolon, offset_to_next = self.extract_main_symbol(paragraph, source_text, alt_main_symb_offset, True)
+        semicolon, offset_to_next = self.extract_main_symbol(paragraph, source_text, alt_main_symb_offset, True, None)
 
         section_match = re.match(r'(<(.+?)>)\, § (\d+)', source_text[start_offset:])
         if (None != section_match):
@@ -3644,7 +3694,7 @@ def parse_entry(paragraph, paragraph_index, headword, headless):
 #    current_offset = paragraph_offset_from_run_offset(paragraph, run_idx, 0)
 
     offset = check_plural_of(paragraph, offset, headword, descriptor)
-    semicolon, current_offset = descriptor.parse_descriptor(paragraph, offset, False, False)
+    semicolon, current_offset = descriptor.parse_descriptor(paragraph, None, offset, False, False)
     #  ^-- no inflection type mismatch
     current_offset = check_trailing_comment(paragraph, current_offset, descriptor)
     if current_offset < 0 or current_offset >= len(paragraph.text):
@@ -3670,7 +3720,7 @@ def parse_entry(paragraph, paragraph_index, headword, headless):
         descriptor = Descriptor(paragraph)
         descriptor.is_secondary = True
         #        dictionary[headword].append(descriptor)
-        semicolon, current_offset = descriptor.parse_descriptor(paragraph, current_offset, False, False)
+        semicolon, current_offset = descriptor.parse_descriptor(paragraph, main_descriptor, current_offset, False, False)
         current_offset = check_trailing_comment(paragraph, current_offset, descriptor)
 
         if not descriptor.main_symbol in main_symbols.keys():
@@ -3761,7 +3811,7 @@ def handle_last_name(descriptor):
         try:
             descriptor.inflection_group.type = 0
         except Exception as e:
-            print('Exception: %s, %s' % (sys.exc_info()[0], e))
+            print('Exception: %s, %s, %s' % (sys.exc_info()[0], e, headword.headword_text))
             return False
         descriptor.graphic_stem = d.make_graphic_stem(headword.headword_text)
         descriptor.save_to_db(db_cursor, headword.last_row_id)
@@ -3769,7 +3819,11 @@ def handle_last_name(descriptor):
         descriptor.part_of_speech = POS.POS_NOUN
         descriptor.main_symbol = 'мо-жо'
         descriptor.inflection_symbol = 'мо'
-        descriptor.inflection_group.type = 0
+        try:
+            descriptor.inflection_group.type = 0
+        except Exception as e:
+            print('Exception: %s, %s, %s' % (sys.exc_info()[0], e, headword.headword_text))
+            return False
         descriptor.save_to_db(db_cursor, headword.last_row_id)
     elif descriptor.last_name_type == LAST_NAME_TYPE.GLINKA:
         descriptor.part_of_speech = POS.POS_NOUN
@@ -3801,7 +3855,8 @@ if __name__ == "__main__":
 
     errors_file = io.open('../Zal-Data/ZalData/conversion_errors_prop_nouns.txt', encoding='utf-16', mode='w')
     zal = Document('../Zal-Data/ALL_PRI.docx')
-#    zal = Document('../Zal-Data/Galka.docx')
+#    zal = Document('../Zal-Data/Miller.docx')
+#    zal = Document('../Zal-Data/Semicolon_F.docx')
 
 #    out_doc = Document()
 
@@ -3820,6 +3875,8 @@ if __name__ == "__main__":
 
     semicolon = False
     outer_semicolon = False
+
+    inflection_offset = -1
 
     for current_paragraph_num in range(len(paragraphs)):
 
@@ -3858,7 +3915,7 @@ if __name__ == "__main__":
 
 #    headwords_with_preverbs = []
     for headword, descriptor in dictionary.items():
-        last_descriptor_id = 0;
+        last_descriptor_id = 0
         if headword.has_second_part:
             # special case: xurda-murda
             ret = save_headword(headword.second_headword)
