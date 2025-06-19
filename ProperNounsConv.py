@@ -757,9 +757,10 @@ def preprocess_sample(paragraph, offset, length=-1):
     while offset < max_length:
         if paragraph.text[offset] in vowels:
             run_idx = run_index_from_offset(paragraph, offset)
-            if paragraph.runs[run_idx].font.name == 'Tim_acc':
+#            if paragraph.runs[run_idx].font.name == 'Tim_acc':
+            if paragraph.runs[run_idx].font.name == 'Antiqua Acc':
                 preprocessed += u'/'
-            elif paragraph.runs[run_idx].font.name == 'Tim_pob':
+            elif paragraph.runs[run_idx].font.name == 'Antiqua Pob':
                 preprocessed += u'\\'
         preprocessed += paragraph.text[offset]
         offset += 1
@@ -782,10 +783,51 @@ def check_restricted(paragraph, source_text, paragraph_offset, descriptor):
     #    return paragraph_offset + len(match.group(2))
     return paragraph_offset
 
-def check_spade(paragraph, source_text, paragraph_offset, descriptor):
-    #    paragraph_offset = p.text.rfind(u'(', 0, offset-1)
-    if -1 == source_text.find(u'\uF0AB'):
+def check_spade(paragraph, source_text, paragraph_offset, headword, descriptor):
+    offset_to_spade = source_text.find(u'\uF0AB')
+
+    if -1 == offset_to_spade:
         return paragraph_offset
+
+    start_offset = source_text.rfind(u'(', 0)
+    match = re.match(r'^\((\-)?([АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ][абвгдеёжзийклмнопрстуфхцчшщъыьэюя]?)(\-)?', source_text[start_offset:])
+    if not match:
+        warning(db_cursor, u'Error extracting spade information.', paragraph)
+        return paragraph_offset
+
+    left_dash = match.group(1)
+    substring_no_accents = match.group(2)
+    right_dash = match.group(3)
+
+    # Find the overwritten part of the headword
+    new_headword = headword.headword_text
+    source_offset = new_headword.find(substring_no_accents)
+
+    segment_with_accents = preprocess_sample(paragraph, paragraph_offset)
+    start_offset = -1
+    stress_offset = 0
+    cyr_alphabet = 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя'
+
+    new_headword_list = list(new_headword)
+
+    # Copy only the relevant part
+    source_pos = 0
+    for pos in range(len(segment_with_accents)):
+        if segment_with_accents[pos] in cyr_alphabet:
+            if start_offset < 0:
+                start_offset = pos
+            new_headword_list[source_pos] = segment_with_accents[pos]
+            source_pos += 1
+        elif '/' == segment_with_accents[pos]:
+            if start_offset < 0:
+                start_offset = 0
+            else:
+                stress_offset = pos - start_offset
+
+    new_headword = ''.join(new_headword_list)
+
+    # save with descriptor
+
     return paragraph_offset
 
 
@@ -1958,7 +2000,7 @@ class Descriptor:
 
         return copy
 
-    def parse_descriptor(self, paragraph, main_descriptor, source_offset, inflection_type_mismatch, is_variant):
+    def parse_descriptor(self, paragraph, main_descriptor, headword, source_offset, inflection_type_mismatch, is_variant):
 
         #        run_idx = start_run_idx
         #        if paragraph.runs[run_idx].bold or paragraph.runs[run_idx].italic:
@@ -2197,6 +2239,8 @@ class Descriptor:
         current_offset = check_difficult_and_missing_forms(paragraph, source, current_offset, self)
         if current_offset >= len(source):
             return semicolon, current_offset
+
+        check_spade(paragraph, source, current_offset, headword, self)
 
         if 0 >= self.irregular_forms.left_bracket_offset:  # ignore left brackets after triangle
             current_offset = check_square_brackets(paragraph, current_offset, self)
@@ -3694,7 +3738,7 @@ def parse_entry(paragraph, paragraph_index, headword, headless):
 #    current_offset = paragraph_offset_from_run_offset(paragraph, run_idx, 0)
 
     offset = check_plural_of(paragraph, offset, headword, descriptor)
-    semicolon, current_offset = descriptor.parse_descriptor(paragraph, None, offset, False, False)
+    semicolon, current_offset = descriptor.parse_descriptor(paragraph, None, headword, offset, False, False)
     #  ^-- no inflection type mismatch
     current_offset = check_trailing_comment(paragraph, current_offset, descriptor)
     if current_offset < 0 or current_offset >= len(paragraph.text):
@@ -3720,7 +3764,7 @@ def parse_entry(paragraph, paragraph_index, headword, headless):
         descriptor = Descriptor(paragraph)
         descriptor.is_secondary = True
         #        dictionary[headword].append(descriptor)
-        semicolon, current_offset = descriptor.parse_descriptor(paragraph, main_descriptor, current_offset, False, False)
+        semicolon, current_offset = descriptor.parse_descriptor(paragraph, main_descriptor, headword, current_offset, False, False)
         current_offset = check_trailing_comment(paragraph, current_offset, descriptor)
 
         if not descriptor.main_symbol in main_symbols.keys():
@@ -3854,8 +3898,8 @@ if __name__ == "__main__":
     db_cursor = db_connection.cursor()
 
     errors_file = io.open('../Zal-Data/ZalData/conversion_errors_prop_nouns.txt', encoding='utf-16', mode='w')
-    zal = Document('../Zal-Data/ALL_PRI.docx')
-#    zal = Document('../Zal-Data/Miller.docx')
+#    zal = Document('../Zal-Data/ALL_PRI.docx')
+    zal = Document('../Zal-Data/Spade.docx')
 #    zal = Document('../Zal-Data/Semicolon_F.docx')
 
 #    out_doc = Document()
