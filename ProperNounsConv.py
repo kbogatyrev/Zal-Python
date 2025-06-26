@@ -784,16 +784,22 @@ def check_restricted(paragraph, source_text, paragraph_offset, descriptor):
     return paragraph_offset
 
 def check_spade(paragraph, source_text, paragraph_offset, headword, descriptor):
+    if not headword:
+        warning(db_cursor, u'No headword.', paragraph)
+        return paragraph_offset
+
     offset_to_spade = source_text.find(u'\uF0AB')
 
     if -1 == offset_to_spade:
         return paragraph_offset
 
-    start_offset = source_text.rfind(u'(', 0)
-    match = re.match(r'^\((\-)?([АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ][абвгдеёжзийклмнопрстуфхцчшщъыьэюя]?)(\-)?', source_text[start_offset:])
+    start_offset = source_text.rfind(u'(', 0, offset_to_spade)
+    match = re.match(r'^\((-)?([АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ][абвгдеёжзийклмнопрстуфхцчшщъыьэюя]?)(-)?\s\uF0AB', source_text[start_offset:])
     if not match:
         warning(db_cursor, u'Error extracting spade information.', paragraph)
         return paragraph_offset
+
+    descriptor.proper_noun.has_spade = True
 
     left_dash = match.group(1)
     substring_no_accents = match.group(2)
@@ -803,7 +809,8 @@ def check_spade(paragraph, source_text, paragraph_offset, headword, descriptor):
     new_headword = headword.headword_text
     source_offset = new_headword.find(substring_no_accents)
 
-    segment_with_accents = preprocess_sample(paragraph, paragraph_offset)
+#    segment_with_accents = preprocess_sample(paragraph, paragraph_offset)
+    segment_with_accents = preprocess_sample(paragraph, start_offset)
     start_offset = -1
     stress_offset = 0
     cyr_alphabet = 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя'
@@ -823,6 +830,8 @@ def check_spade(paragraph, source_text, paragraph_offset, headword, descriptor):
                 start_offset = 0
             else:
                 stress_offset = pos - start_offset
+        elif ')' == segment_with_accents[pos]:
+            break
 
     new_headword = ''.join(new_headword_list)
 
@@ -1161,7 +1170,7 @@ def check_square_brackets(paragraph, paragraph_offset, descriptor):
     next = get_next_segment(paragraph, offset)
     if len(next) > 0:
         if next in main_symbols:
-            semicolon, offset = variant_descriptor.parse_descriptor(paragraph, None, offset, False, True)
+            semicolon, offset = variant_descriptor.parse_descriptor(paragraph, None, None, offset, False, True)
             if semicolon:
                 warning(db_cursor, u'Unexpected semicolon inside square brackets.', paragraph)
                 return offset
@@ -1618,31 +1627,33 @@ class ProperNoun:
         self.source = ''
         self.word_id = 0
         self.word_id_2 = 0
-        self.spade = ''
+        self.has_spade = False
         self.is_last_name = False
         self.has_tilde = False
         self.g_pl_assumed = False
         self.has_space_separator = False
         self.comment = ''
+        self.is_edited = False
 
         return
 
-    def save_to_db(self, db_cursor):
+    def save_to_db(self, db_cursor, headword_last_row_id):
+        self.word_id = headword_last_row_id
         try:
             #   We also want to save the raw source text
 
-            params = (self.source,                          # 0
-                      self.word_id,                         # 1
+            params = (self.word_id,                         # 1
                       self.word_id_2,                       # 2
-                      self.spade,                           # 3
+                      self.has_spade,                       # 3
                       self.is_last_name,                    # 4
                       self.has_tilde,                       # 5
                       self.g_pl_assumed,                    # 6
                       self.has_space_separator,             # 7
-                      self.comment)                         # 8
+                      self.comment,                         # 8
+                      self.is_edited)                       # 9
 
-            db_query = u'INSERT INTO headword VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-                                                    #       0  1  2  3  4  5  6  7  8
+            db_query = u'INSERT INTO proper_nouns VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                                                        #       1  2  3  4  5  6  7  8  9
             db_cursor.execute(db_query, params)
             self.last_row_id = db_cursor.lastrowid
 
@@ -2020,6 +2031,8 @@ class Descriptor:
 
         global inflection_offset
 
+        self.proper_noun = ProperNoun()
+
         semicolon = False
 
         #        if None == source or '' == source:
@@ -2251,7 +2264,9 @@ class Descriptor:
             current_offset += 1
             semicolon = True
 
-        return semicolon, current_offset  # parse_descriptor()
+        return semicolon, current_offset
+
+# parse_descriptor()
 
     #
     #  Assemble and identify main symbol
@@ -2362,6 +2377,7 @@ class Descriptor:
             return semicolon, offset_to_next
         else:
             if 'ф.' == extracted:
+                self.proper_noun.is_last_name = True
                 if self.is_secondary and inflection_offset > -1:
                     self.get_secondary_last_name_type(main_descriptor)
                     self.inflection_group = main_descriptor.inflection_group.copy()
@@ -3898,8 +3914,8 @@ if __name__ == "__main__":
     db_cursor = db_connection.cursor()
 
     errors_file = io.open('../Zal-Data/ZalData/conversion_errors_prop_nouns.txt', encoding='utf-16', mode='w')
-#    zal = Document('../Zal-Data/ALL_PRI.docx')
-    zal = Document('../Zal-Data/Spade.docx')
+    zal = Document('../Zal-Data/ALL_PRI.docx')
+#    zal = Document('../Zal-Data/Spade.docx')
 #    zal = Document('../Zal-Data/Semicolon_F.docx')
 
 #    out_doc = Document()
@@ -4004,6 +4020,7 @@ if __name__ == "__main__":
                 handle_last_name(d)
             else:
                 d.save_to_db(db_cursor, headword.last_row_id)
+                d.proper_noun.save_to_db(db_cursor, headword.last_row_id)
 
 # Irrelevant for prop. nouns
 #    for headword in headwords_with_preverbs:
