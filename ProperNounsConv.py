@@ -1170,7 +1170,7 @@ def check_square_brackets(paragraph, paragraph_offset, descriptor):
     next = get_next_segment(paragraph, offset)
     if len(next) > 0:
         if next in main_symbols:
-            semicolon, offset = variant_descriptor.parse_descriptor(paragraph, None, None, offset, False, True)
+            semicolon, offset = variant_descriptor.parse_descriptor(paragraph, None, headword, offset, False, True)
             if semicolon:
                 warning(db_cursor, u'Unexpected semicolon inside square brackets.', paragraph)
                 return offset
@@ -1628,6 +1628,7 @@ class ProperNoun:
         self.word_id = 0
         self.word_id_2 = 0
         self.has_spade = False
+        self.is_hypocoristicon = False
         self.is_last_name = False
         self.has_tilde = False
         self.g_pl_assumed = False
@@ -1645,15 +1646,16 @@ class ProperNoun:
             params = (self.word_id,                         # 1
                       self.word_id_2,                       # 2
                       self.has_spade,                       # 3
-                      self.is_last_name,                    # 4
-                      self.has_tilde,                       # 5
-                      self.g_pl_assumed,                    # 6
-                      self.has_space_separator,             # 7
-                      self.comment,                         # 8
-                      self.is_edited)                       # 9
+                      self.is_hypocoristicon,               # 4
+                      self.is_last_name,                    # 5
+                      self.has_tilde,                       # 6
+                      self.g_pl_assumed,                    # 7
+                      self.has_space_separator,             # 8
+                      self.comment,                         # 9
+                      self.is_edited)                       # 10
 
-            db_query = u'INSERT INTO proper_nouns VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-                                                        #       1  2  3  4  5  6  7  8  9
+            db_query = u'INSERT INTO proper_nouns VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                                                        #       1  2  3  4  5  6  7  8  9  10
             db_cursor.execute(db_query, params)
             self.last_row_id = db_cursor.lastrowid
 
@@ -3917,6 +3919,7 @@ if __name__ == "__main__":
     zal = Document('../Zal-Data/ALL_PRI.docx')
 #    zal = Document('../Zal-Data/Spade.docx')
 #    zal = Document('../Zal-Data/Semicolon_F.docx')
+#    zal = Document('../Zal-Data/NoHeadword.docx')
 
 #    out_doc = Document()
 
@@ -3971,7 +3974,7 @@ if __name__ == "__main__":
 
     #    for current_paragraph_num in range (len(paragraphs))...
 
-    print ('Total entries: ' + str(len(dictionary.items())))
+    print ('Total dictionary entries: ' + str(len(dictionary.items())))
 
 #    headwords_with_preverbs = []
     for headword, descriptor in dictionary.items():
