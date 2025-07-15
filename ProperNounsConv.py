@@ -10,6 +10,8 @@ from collections import defaultdict
 
 from docx import Document
 
+import codecs
+
 
 #from EndingsConverter import *
 
@@ -673,24 +675,30 @@ def check_plus_sign(paragraph, source_text, paragraph_offset, descriptor):
     second_descriptor = descriptor.copy()
     second_descriptor.is_second_part = True
     descriptor.has_second_part = True
+    if not descriptor.comma_after_main_symb:
+        semicolon, paragraph_offset = second_descriptor.extract_main_symbol(paragraph, source_text, paragraph_offset, False, None)
     s, paragraph_offset = second_descriptor.check_angle_brackets(paragraph, paragraph.text, paragraph_offset)
     #    if s:
     #        source = source[:self.semicolon_offset]
     #        semicolon = True
 
-    inflection_offset = paragraph_offset
     ig2 = InflectionGroup(second_descriptor)
-    paragraph_offset = ig2.parse_inflection_group(p, source_text, paragraph_offset)
     ig2.multipart = MULTIPART_TYPE_ENUM.BOTH_PARTS_INFLECTED
     ig2.is_second_part = True
-    if ig2 != None:
-        second_descriptor.second_inflection_group = ig2
+
+    if not descriptor.comma_after_main_symb:
+        inflection_offset = paragraph_offset
+        paragraph_offset = ig2.parse_inflection_group(p, source_text, paragraph_offset)
+    else:
+        ig2.type = 1
+        ig2.accent_type_1 = 1
+
+    second_descriptor.second_inflection_group = ig2
     dictionary[headword].append(second_descriptor)
 
 #    descriptor.inflection_group.multipart = 2
 
     return paragraph_offset
-
 
 def check_see_ref(paragraph, source_text, paragraph_offset, descriptor):
     match = re.match(r'^(\s*склон. см.\s+|\s*спряж. см.\s+)(.*)', source_text[paragraph_offset:])
@@ -1720,10 +1728,19 @@ class InflectionGroup:
         if self.descriptor.part_of_speech in uninflected_pos:
             return paragraph_offset
 
+        if ('п' == self.descriptor.main_symbol and not self.descriptor.comma_after_main_symb):
+            self.type = 1
+            self.accent_type_1 = AT_ENUM.AT_A
+            self.has_data = True
+            return paragraph_offset
+
+        #        warning(db_cursor, u'Unable to find inflection group.', paragraph)
+
+
         match = re.match(r'^\s*?([абвгдеёжзийклмнопрстуфхцчшщъыьэюя\.]+)?\s*?(\d{1,2}).*',
                          source_text[paragraph_offset:])
         if None == match:
-            if not headword in spryazh_sm:
+            if (not headword in spryazh_sm):
                 warning(db_cursor, u'Unable to find inflection group.', paragraph)
             return paragraph_offset
 
@@ -1850,6 +1867,7 @@ class Descriptor:
         self.paragraph_index = -1
         self.variant = False  # currently unused ?
         self.main_symbol = u''
+        self.comma_after_main_symb = False
         self.inflection_symbol = u''  # usually same as above, but cf. б<абий п <мс 6*а>
         self.alt_inflection_symbol = u''  # does it exist?
         self.is_plural_of = False
@@ -1937,6 +1955,7 @@ class Descriptor:
         copy.paragraph_index = self.paragraph_index
         copy.variant = self.variant
         copy.main_symbol = self.main_symbol
+        copy.comma_after_main_symb = self.comma_after_main_symb
         copy.inflection_symbol = self.inflection_symbol
         copy.alt_inflection_symbol = self.alt_inflection_symbol
         copy.is_plural_of = self.is_plural_of
@@ -2053,10 +2072,10 @@ class Descriptor:
         source = paragraph.text
         semicolon, current_offset = self.extract_main_symbol(paragraph, source, start_offset, False, main_descriptor)
 
-        if self.main_symbol == 'п':
-            match = re.match(r'\s+\+\s+(.+)', source[current_offset-1:])
-            if match != None:
-                check_plus_sign(paragraph, source, current_offset-1, self)
+#        if self.main_symbol == 'п':
+#            match = re.match(r'\s+\+\s+(.+)', source[current_offset-1:])
+#            if match != None:
+#                check_plus_sign(paragraph, source, current_offset-1, self)
 
         if self.semicolon_offset > -1:
             source = source[:self.semicolon_offset]
@@ -2124,6 +2143,7 @@ class Descriptor:
 
         inflection_offset = current_offset
         ig = InflectionGroup(self)
+
         current_offset = ig.parse_inflection_group(paragraph, source, current_offset)
         if ig != None and ig.has_data:
             self.inflection_group = ig
@@ -2279,6 +2299,7 @@ class Descriptor:
 
         current_offset = start_offset
         semicolon = False
+        semicolon = False
         extracted_symbol = ''
         extracted_alt_symbol = ''
 
@@ -2359,6 +2380,11 @@ class Descriptor:
                         offset_to_next = alt_offset + m_alt.start(1)
 
                 self.has_alt_main_symbol = True
+
+            if u',' == separator:
+                self.comma_after_main_symb = True
+            else:
+                self.comma_after_main_symb = False
 
             if len(source_text[offset_to_next:]) > 0:
                 next_char = source_text[offset_to_next:offset_to_next + 1]
@@ -3916,14 +3942,15 @@ if __name__ == "__main__":
     db_cursor = db_connection.cursor()
 
     errors_file = io.open('../Zal-Data/ZalData/conversion_errors_prop_nouns.txt', encoding='utf-16', mode='w')
-    zal = Document('../Zal-Data/ALL_PRI.docx')
+#    zal = Document('../Zal-Data/ALL_PRI.docx')
 #    zal = Document('../Zal-Data/Spade.docx')
 #    zal = Document('../Zal-Data/Semicolon_F.docx')
 #    zal = Document('../Zal-Data/NoHeadword.docx')
+    zal = Document('../Zal-Data/NoInflection.docx')
 
 #    out_doc = Document()
 
-    #    out_file = codecs.open('test_data.txt', encoding='utf-16', mode='w')
+    out_file = codecs.open('test_data.txt', encoding='utf-16', mode='w')
 
     dictionary = defaultdict(list)
 
@@ -4034,5 +4061,7 @@ if __name__ == "__main__":
     db_connection.commit()
     db_cursor.close()
     db_connection.close()
+
+    out_file.close()
 
     os._exit(0)
