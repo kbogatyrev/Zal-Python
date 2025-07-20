@@ -2571,6 +2571,14 @@ class Descriptor:
 
         return semicolon, offset_to_next
 
+    def adjust_second_ig(self, first_part_desc):
+        if first_part_desc is None:
+            warning(db_cursor, u'First part descriptor is not defined.', self.paragraph)
+            return False
+        if 'п' == first_part_desc.main_symbol:
+            first_part_desc.main_symbol = self.main_symbol
+            first_part_desc.part_of_speech = POS.POS_NOUN
+
     def make_graphic_stem(self, headword_source, second_part=False):
         #                                         ^--- (xurda)-murda
         if len(headword_source) < 1:
@@ -3942,11 +3950,11 @@ if __name__ == "__main__":
     db_cursor = db_connection.cursor()
 
     errors_file = io.open('../Zal-Data/ZalData/conversion_errors_prop_nouns.txt', encoding='utf-16', mode='w')
-#    zal = Document('../Zal-Data/ALL_PRI.docx')
+    zal = Document('../Zal-Data/ALL_PRI.docx')
 #    zal = Document('../Zal-Data/Spade.docx')
 #    zal = Document('../Zal-Data/Semicolon_F.docx')
 #    zal = Document('../Zal-Data/NoHeadword.docx')
-    zal = Document('../Zal-Data/NoInflection.docx')
+#    zal = Document('../Zal-Data/NoInflection.docx')
 
 #    out_doc = Document()
 
@@ -4012,6 +4020,11 @@ if __name__ == "__main__":
             if not ret:
                 continue
             descriptors = dictionary[headword]
+            first_part_d = None
+            for d in descriptors:
+                if not d.is_second_part:
+                    first_part_d = d
+                    break
             for d in descriptors:
                 if not d.is_second_part:
                     continue
@@ -4023,6 +4036,7 @@ if __name__ == "__main__":
                         continue
                 right = headword.headword_text[dash_offset + 1:]
                 is_second_part = True
+                d.adjust_second_ig(first_part_d)
                 d.graphic_stem = d.make_graphic_stem(right, is_second_part)
                 d.save_to_db(db_cursor, headword.second_headword.last_row_id, True)
                                                                                 # ^-- 2nd part
