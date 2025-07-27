@@ -4062,6 +4062,7 @@ if __name__ == "__main__":
                 d.graphic_stem = d.make_graphic_stem(headword.headword_text)
             if d.last_name_type != LAST_NAME_TYPE.UNDEFINED:
                 handle_last_name(d)
+                d.proper_noun.save_to_db(db_cursor, headword.last_row_id)
             else:
                 d.save_to_db(db_cursor, headword.last_row_id)
                 d.proper_noun.save_to_db(db_cursor, headword.last_row_id)
