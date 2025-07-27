@@ -686,12 +686,12 @@ def check_plus_sign(paragraph, source_text, paragraph_offset, descriptor):
     ig2.multipart = MULTIPART_TYPE_ENUM.BOTH_PARTS_INFLECTED
     ig2.is_second_part = True
 
-    if not descriptor.comma_after_main_symb:
-        inflection_offset = paragraph_offset
-        paragraph_offset = ig2.parse_inflection_group(p, source_text, paragraph_offset)
-    else:
-        ig2.type = 1
-        ig2.accent_type_1 = 1
+#    if not descriptor.comma_after_main_symb:
+    inflection_offset = paragraph_offset
+    paragraph_offset = ig2.parse_inflection_group(p, source_text, paragraph_offset)
+#    else:
+#        ig2.type = 1
+#        ig2.accent_type_1 = 1
 
     second_descriptor.second_inflection_group = ig2
     dictionary[headword].append(second_descriptor)
@@ -3955,6 +3955,7 @@ if __name__ == "__main__":
 #    zal = Document('../Zal-Data/Semicolon_F.docx')
 #    zal = Document('../Zal-Data/NoHeadword.docx')
 #    zal = Document('../Zal-Data/NoInflection.docx')
+#    zal = Document('../Zal-Data/Ulenshpigel.docx')
 
 #    out_doc = Document()
 
