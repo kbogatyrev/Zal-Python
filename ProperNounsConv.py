@@ -674,6 +674,7 @@ def check_plus_sign(paragraph, source_text, paragraph_offset, descriptor):
     second_descriptor = Descriptor(paragraph)
     second_descriptor = descriptor.copy()
     second_descriptor.is_second_part = True
+    second_descriptor.proper_noun = descriptor.proper_noun.copy()
     descriptor.has_second_part = True
     if not descriptor.comma_after_main_symb:
         semicolon, paragraph_offset = second_descriptor.extract_main_symbol(paragraph, source_text, paragraph_offset, False, None)
@@ -1637,6 +1638,7 @@ class ProperNoun:
         self.word_id_2 = 0
         self.has_spade = False
         self.is_hypocoristicon = False
+        self.opposite_gender = False
         self.is_last_name = False
         self.has_tilde = False
         self.g_pl_assumed = False
@@ -1645,6 +1647,22 @@ class ProperNoun:
         self.is_edited = False
 
         return
+
+    def copy(self):
+        copy = ProperNoun()
+        copy.source = self.source
+        copy.word_id = self.word_id
+        copy.word_id_2 = self.word_id_2
+        copy.has_spade = self.has_spade
+        copy.is_hypocoristicon = self.is_hypocoristicon
+        copy.is_last_name = self.is_last_name
+        copy.has_tilde = self.has_tilde
+        copy.g_pl_assumed = self.g_pl_assumed
+        copy.has_space_separator = self.has_space_separator
+        copy.comment = self.comment
+        copy.is_edited = self.is_edited
+
+        return copy
 
     def save_to_db(self, db_cursor, headword_last_row_id):
         self.word_id = headword_last_row_id
@@ -2172,6 +2190,7 @@ class Descriptor:
 
         if u'\uF07E' == paragraph.text[current_offset]:  # tilde
             self.no_comparative = True
+            self.proper_noun.has_tilde = True
             #               good place to check for §11 (слабенький):
             section_match = re.match(r'(.*?\, § (\d+))', source[current_offset:])
             if (None != section_match):
@@ -2359,6 +2378,9 @@ class Descriptor:
             offset_to_next = start_offset + m_next.end(1)
             next = source_text[start_offset:offset_to_next]
             source = source_text[offset_to_next:]
+            while offset_to_next < len(source_text) and source_text[offset_to_next] in (' ', '\t'):
+                offset_to_next += 1
+                source = source_text[offset_to_next:]
 
             extracted = source_text[start_offset:offset_to_next - 1]
 
@@ -2383,6 +2405,7 @@ class Descriptor:
 
             if u',' == separator:
                 self.comma_after_main_symb = True
+                extracted = extracted[:-1]
             else:
                 self.comma_after_main_symb = False
 
@@ -2404,13 +2427,17 @@ class Descriptor:
                 self.section = section_num
             return semicolon, offset_to_next
         else:
-            if 'ф.' == extracted:
+            if extracted in ['ф.', 'ф.,'] or main_descriptor is not None and main_descriptor.proper_noun.is_last_name:
                 self.proper_noun.is_last_name = True
                 if self.is_secondary and inflection_offset > -1:
                     self.get_secondary_last_name_type(main_descriptor)
                     self.inflection_group = main_descriptor.inflection_group.copy()
                 else:
                     offset_to_ig, offset_to_next = self.get_last_name_type(source_text, offset_to_next)
+#                    if main_descriptor is not None and main_descriptor.proper_noun.is_last_name:
+#                        offset_to_ig, offset_to_next = self.get_last_name_type(source_text, offset_to_next)
+#                    else:
+#                        offset_to_ig, offset_to_next = self.get_last_name_type(source_text, start_offset)
                     ig = InflectionGroup(self)
                     current_offset = ig.parse_inflection_group(paragraph, source_text, offset_to_ig)
                     if ig is not None and ig.has_data:
@@ -2466,6 +2493,7 @@ class Descriptor:
         match = re.match(r'^(\d+)(.+?)\s\uF07E\s(\d+)', source_text[offset:])
         #                                         ^-- tilde
         if None != match:
+            self.proper_noun.has_tilde = True
             if match.group(1) is not None and match.group(2) is not None:
 #                inflection_type = match.group(1)
 #                accent_type = match.group(2)
@@ -2557,7 +2585,7 @@ class Descriptor:
 
         alt_main_symb_offset = start_offset + match.start(2)
 
-        semicolon, offset_to_next = self.extract_main_symbol(paragraph, source_text, alt_main_symb_offset, True, None)
+        semicolon, offset_to_next = self.extract_main_symbol(paragraph, source_text, alt_main_symb_offset, True, self)
 
         section_match = re.match(r'(<(.+?)>)\, § (\d+)', source_text[start_offset:])
         if (None != section_match):
@@ -3946,7 +3974,7 @@ def handle_last_name(descriptor):
 #  Main
 #
 if __name__ == "__main__":
-    db_connection = sqlite3.connect('../Zal-Data/ZalData/ZalData_PropNouns.db3')
+    db_connection = sqlite3.connect('../Zal-Data/ZalData/ProperNouns.db3')
     db_cursor = db_connection.cursor()
 
     errors_file = io.open('../Zal-Data/ZalData/conversion_errors_prop_nouns.txt', encoding='utf-16', mode='w')
@@ -3956,6 +3984,9 @@ if __name__ == "__main__":
 #    zal = Document('../Zal-Data/NoHeadword.docx')
 #    zal = Document('../Zal-Data/NoInflection.docx')
 #    zal = Document('../Zal-Data/Ulenshpigel.docx')
+#    zal = Document('../Zal-Data/Godunov-Cherdyntsev.docx')
+#    zal = Document('../Zal-Data/TarasBulba.docx')
+#    zal = Document('../Zal-Data/Ivanov.docx')
 
 #    out_doc = Document()
 
@@ -4010,6 +4041,7 @@ if __name__ == "__main__":
 
     #    for current_paragraph_num in range (len(paragraphs))...
 
+    print ('Total paragraphs read: ' + str(len(paragraphs)))
     print ('Total dictionary entries: ' + str(len(dictionary.items())))
 
 #    headwords_with_preverbs = []
