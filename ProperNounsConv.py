@@ -1220,6 +1220,8 @@ def check_trailing_comment(paragraph, paragraph_offset, descriptor):
     match = re.match(r'^(\s*?)\((.+?)\)\s*?(.*)$', paragraph.text[paragraph_offset:])
     if match != None:
         descriptor.trailing_comment = match.group(2)
+        if descriptor.trailing_comment == 'гипокор.':
+            descriptor.proper_noun.is_hypocoristicon = True
         m3 = match.group(3)
         if len(m3) > 0:
             if ';' != m3:
@@ -1655,6 +1657,7 @@ class ProperNoun:
         copy.word_id_2 = self.word_id_2
         copy.has_spade = self.has_spade
         copy.is_hypocoristicon = self.is_hypocoristicon
+        copy.opposite_gender = self.opposite_gender
         copy.is_last_name = self.is_last_name
         copy.has_tilde = self.has_tilde
         copy.g_pl_assumed = self.g_pl_assumed
@@ -1673,15 +1676,16 @@ class ProperNoun:
                       self.word_id_2,                       # 2
                       self.has_spade,                       # 3
                       self.is_hypocoristicon,               # 4
-                      self.is_last_name,                    # 5
-                      self.has_tilde,                       # 6
-                      self.g_pl_assumed,                    # 7
-                      self.has_space_separator,             # 8
-                      self.comment,                         # 9
-                      self.is_edited)                       # 10
+                      self.opposite_gender,                 # 5
+                      self.is_last_name,                    # 6
+                      self.has_tilde,                       # 7
+                      self.g_pl_assumed,                    # 8
+                      self.has_space_separator,             # 9
+                      self.comment,                         # 10
+                      self.is_edited)                       # 11
 
-            db_query = u'INSERT INTO proper_nouns VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-                                                        #       1  2  3  4  5  6  7  8  9  10
+            db_query = u'INSERT INTO proper_nouns VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                                                        #       1  2  3  4  5  6  7  8  9  10 11
             db_cursor.execute(db_query, params)
             self.last_row_id = db_cursor.lastrowid
 
@@ -1960,7 +1964,7 @@ class Descriptor:
         self.last_name_type = LAST_NAME_TYPE.UNDEFINED
         self.last_name_inflection_type = -1
         self.last_name_accent_type = ''
-        self.opposite_gender = False     # superscript "+"
+#        self.opposite_gender = False     # superscript "+"
         self.descriptor_id = 0
         self.last_descriptor_id = 0
 
@@ -2046,7 +2050,6 @@ class Descriptor:
         copy.is_second_part = self.is_second_part
         copy.is_last_name = self.is_last_name
         copy.last_name_type = self.last_name_type
-        copy.opposite_gender = self.opposite_gender
 
         return copy
 
@@ -2318,7 +2321,6 @@ class Descriptor:
 
         current_offset = start_offset
         semicolon = False
-        semicolon = False
         extracted_symbol = ''
         extracted_alt_symbol = ''
 
@@ -2341,7 +2343,7 @@ class Descriptor:
             if u'+' == separator:
                 run_idx = run_index_from_offset(paragraph, start_offset+m_source.start(1))
                 if paragraph.runs[run_idx].font.size.pt == 6.0:
-                    self.opposite_gender = True
+                    self.proper_noun.opposite_gender = True
 
             if u';' == separator:
                 self.semicolon_offset = start_offset + m_source.start(1)
@@ -3987,6 +3989,7 @@ if __name__ == "__main__":
 #    zal = Document('../Zal-Data/Godunov-Cherdyntsev.docx')
 #    zal = Document('../Zal-Data/TarasBulba.docx')
 #    zal = Document('../Zal-Data/Ivanov.docx')
+#    zal = Document('../Zal-Data/Seva.docx')
 
 #    out_doc = Document()
 
