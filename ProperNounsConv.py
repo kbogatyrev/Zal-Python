@@ -1870,6 +1870,9 @@ class InflectionGroup:
             if paragraph_offset >= len(source_text):
                 return paragraph_offset
 
+        if paragraph_offset < len(source_text) and '÷' == source_text[paragraph_offset]:
+            self.descriptor.proper_noun.g_pl_assumed = True
+
         paragraph_offset = check_circled_digit(paragraph, source_text, paragraph_offset, self)
 
         if paragraph_offset < len(paragraph.text) and '>' == paragraph.text[paragraph_offset]:
@@ -3990,8 +3993,9 @@ if __name__ == "__main__":
 #    zal = Document('../Zal-Data/TarasBulba.docx')
 #    zal = Document('../Zal-Data/Ivanov.docx')
 #    zal = Document('../Zal-Data/Seva.docx')
+#    zal = Document('../Zal-Data/G_Pl_assumed.docx')
 
-#    out_doc = Document()
+    #    out_doc = Document()
 
     out_file = codecs.open('test_data.txt', encoding='utf-16', mode='w')
 
