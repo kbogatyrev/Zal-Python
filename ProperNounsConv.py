@@ -657,6 +657,8 @@ def check_plus_sign(paragraph, source_text, paragraph_offset, descriptor):
     separator_pos = 0
     for char in paragraph.text:
         if char in [u'-', u' ']:
+            if u' ' == char:
+                descriptor.proper_noun.has_space_separator = True
             break
         separator_pos += 1
 
