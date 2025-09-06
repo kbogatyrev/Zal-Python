@@ -758,7 +758,7 @@ def check_colon(paragraph, source_text, paragraph_offset, descriptor):
 def preprocess_sample(paragraph, offset, length=-1):
     preprocessed = u''
 
-    max_length = len(paragraph.text);
+    max_length = len(paragraph.text)
     if length >= 0:
         max_length = length
 
@@ -778,7 +778,6 @@ def preprocess_sample(paragraph, offset, length=-1):
 
     return preprocessed
 
-
 def check_restricted(paragraph, source_text, paragraph_offset, descriptor):
     #    paragraph_offset = p.text.rfind(u'(', 0, offset-1)
     if -1 == source_text.find(u'\uF047'):
@@ -797,20 +796,22 @@ def check_restricted(paragraph, source_text, paragraph_offset, descriptor):
 def check_spade(paragraph, source_text, paragraph_offset, headword, descriptor):
     if not headword:
         warning(db_cursor, u'No headword.', paragraph)
-        return paragraph_offset
+        return '', -1, paragraph_offset
 
     offset_to_spade = source_text.find(u'\uF0AB')
 
     if -1 == offset_to_spade:
-        return paragraph_offset
+        return '', -1, paragraph_offset
 
     start_offset = source_text.rfind(u'(', 0, offset_to_spade)
-    match = re.match(r'^\((-)?([АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ][абвгдеёжзийклмнопрстуфхцчшщъыьэюя]?)(-)?\s\uF0AB', source_text[start_offset:])
+    match = re.match( \
+        r'^\((-)?([АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя][абвгдеёжзийклмнопрстуфхцчшщъыьэюя]*)(-)?\s\uF0AB', \
+        source_text[start_offset:])
     if not match:
         warning(db_cursor, u'Error extracting spade information.', paragraph)
-        return paragraph_offset
+        return '', -1, paragraph_offset
 
-    descriptor.proper_noun.has_spade = True
+#    descriptor.proper_noun.has_spade = True
 
     left_dash = match.group(1)
     substring_no_accents = match.group(2)
@@ -818,29 +819,36 @@ def check_spade(paragraph, source_text, paragraph_offset, headword, descriptor):
 
     # Find the overwritten part of the headword
     new_headword = headword.headword_text
-    source_offset = new_headword.find(substring_no_accents)
 
 #    segment_with_accents = preprocess_sample(paragraph, paragraph_offset)
-    segment_with_accents = preprocess_sample(paragraph, start_offset)
+    match_offset = start_offset + match.span(2)[0]
+    segment_with_accents = preprocess_sample(paragraph, match_offset, match_offset+len(substring_no_accents))
     start_offset = -1
     stress_offset = 0
     cyr_alphabet = 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя'
 
+    start_search_pos = 0
+    end_search_pos = len(new_headword) - 1
+    if right_dash:
+        end_search_pos -= 1
+    if left_dash:
+        start_search_pos += 1
+
+    source_pos = new_headword.find(substring_no_accents, start_search_pos, end_search_pos)
     new_headword_list = list(new_headword)
 
     # Copy only the relevant part
-    source_pos = 0
     for pos in range(len(segment_with_accents)):
         if segment_with_accents[pos] in cyr_alphabet:
             if start_offset < 0:
-                start_offset = pos
+                start_offset = source_pos
             new_headword_list[source_pos] = segment_with_accents[pos]
             source_pos += 1
         elif '/' == segment_with_accents[pos]:
             if start_offset < 0:
                 start_offset = 0
             else:
-                stress_offset = pos - start_offset
+                stress_offset = pos + start_offset
         elif ')' == segment_with_accents[pos]:
             break
 
@@ -848,7 +856,7 @@ def check_spade(paragraph, source_text, paragraph_offset, headword, descriptor):
 
     # save with descriptor
 
-    return paragraph_offset
+    return new_headword, stress_offset, paragraph_offset
 
 
 #    return paragraph_offset
@@ -1636,68 +1644,105 @@ class Headword:
 #  Proper noun entry
 #
 class ProperNoun:
-    def __init__(self):
+    def __init__(self, paragraph):
+        self.paragraph = paragraph
         self.source = ''
         self.word_id = 0
         self.word_id_2 = 0
-        self.has_spade = False
         self.is_hypocoristicon = False
         self.opposite_gender = False
         self.is_last_name = False
         self.has_tilde = False
         self.g_pl_assumed = False
         self.has_space_separator = False
+        self.spade_text = ''
+        self.spade_stress_pos = -1
         self.comment = ''
+        self.spade_text = ''
+        self.spade_stress_pos = ''
         self.is_edited = False
 
         return
 
     def copy(self):
-        copy = ProperNoun()
+        copy = ProperNoun(self.paragraph)
         copy.source = self.source
         copy.word_id = self.word_id
         copy.word_id_2 = self.word_id_2
-        copy.has_spade = self.has_spade
         copy.is_hypocoristicon = self.is_hypocoristicon
         copy.opposite_gender = self.opposite_gender
         copy.is_last_name = self.is_last_name
         copy.has_tilde = self.has_tilde
         copy.g_pl_assumed = self.g_pl_assumed
         copy.has_space_separator = self.has_space_separator
+        copy.spade_text = self.spade_text
         copy.comment = self.comment
+        copy.spade_text = self.spade_text
+        copy.spade_stress_pos = self.spade_stress_pos
         copy.is_edited = self.is_edited
 
         return copy
 
-    def save_to_db(self, db_cursor, headword_last_row_id):
+    def save_proper_noun_to_db(self, db_cursor, headword_last_row_id, descriptor_last_row_id):
         self.word_id = headword_last_row_id
         try:
             #   We also want to save the raw source text
 
-            params = (self.word_id,                         # 1
-                      self.word_id_2,                       # 2
-                      self.has_spade,                       # 3
-                      self.is_hypocoristicon,               # 4
-                      self.opposite_gender,                 # 5
-                      self.is_last_name,                    # 6
-                      self.has_tilde,                       # 7
-                      self.g_pl_assumed,                    # 8
-                      self.has_space_separator,             # 9
-                      self.comment,                         # 10
-                      self.is_edited)                       # 11
+            pn_params = (self.word_id,                         #  1
+                         self.word_id_2,                       #  2
+                         self.is_hypocoristicon,               #  3
+                         self.opposite_gender,                 #  4
+                         self.is_last_name,                    #  5
+                         self.has_tilde,                       #  6
+                         self.g_pl_assumed,                    #  7
+                         self.has_space_separator,             #  8
+                         self.comment,                         #  9
+                         self.is_edited)                       # 10
 
-            db_query = u'INSERT INTO proper_nouns VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-                                                        #       1  2  3  4  5  6  7  8  9  10 11
-            db_cursor.execute(db_query, params)
-            self.last_row_id = db_cursor.lastrowid
+            pn_query = u'INSERT INTO proper_nouns VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                                                        #       1  2  3  4  5  6  7  8  9  10
+            db_cursor.execute(pn_query, pn_params)
+            pn_last_row_id = db_cursor.lastrowid
 
         except sqlite3.Error as sqlite_ex:
             print('sqlite3 error: ', sqlite_ex.args[0])
             return False
         except Exception as e:
             print('Exception: %s, %s' % (sys.exc_info()[0], e))
-        return True
+            return False
 
+        if not self.spade_text:
+            return True
+
+        try:
+            spade_params = (self.word_id,
+                            descriptor_last_row_id,
+                            self.spade_text)
+            spade_query = u'INSERT INTO proper_nouns_spade VALUES (NULL, ?, ?, ?)'
+            db_cursor.execute(spade_query, spade_params)
+        except sqlite3.Error as sqlite_ex:
+            print('sqlite3 error: ', sqlite_ex.args[0])
+            return False
+        except Exception as e:
+            print('Exception: %s, %s' % (sys.exc_info()[0], e))
+            return False
+
+        spade_last_row_id = db_cursor.lastrowid
+
+        try:
+            spade_stress_params = (spade_last_row_id,
+                                   self.spade_stress_pos,
+                                   0)
+            spade_stress_query = u'INSERT INTO proper_nouns_spade_stress VALUES (NULL, ?, ?, ?)'
+            db_cursor.execute(spade_stress_query, spade_stress_params)
+        except sqlite3.Error as sqlite_ex:
+            print('sqlite3 error: ', sqlite_ex.args[0])
+            return False
+        except Exception as e:
+            print('Exception: %s, %s' % (sys.exc_info()[0], e))
+            return False
+
+        return True
 
 #
 #  Inflection group
@@ -2078,7 +2123,7 @@ class Descriptor:
 
         global inflection_offset
 
-        self.proper_noun = ProperNoun()
+        self.proper_noun = ProperNoun(self.paragraph)
 
         semicolon = False
 
@@ -2302,7 +2347,9 @@ class Descriptor:
         if current_offset >= len(source):
             return semicolon, current_offset
 
-        check_spade(paragraph, source, current_offset, headword, self)
+        alt_form, alt_stress_pos, current_offset = check_spade(paragraph, source, current_offset, headword, self)
+        self.proper_noun.spade_text = alt_form
+        self.proper_noun.spade_stress_pos = alt_stress_pos
 
         if 0 >= self.irregular_forms.left_bracket_offset:  # ignore left brackets after triangle
             current_offset = check_square_brackets(paragraph, current_offset, self)
@@ -3996,6 +4043,7 @@ if __name__ == "__main__":
 #    zal = Document('../Zal-Data/Ivanov.docx')
 #    zal = Document('../Zal-Data/Seva.docx')
 #    zal = Document('../Zal-Data/G_Pl_assumed.docx')
+#    zal = Document('../Zal-Data/Spade.docx')
 
     #    out_doc = Document()
 
@@ -4104,10 +4152,10 @@ if __name__ == "__main__":
                 d.graphic_stem = d.make_graphic_stem(headword.headword_text)
             if d.last_name_type != LAST_NAME_TYPE.UNDEFINED:
                 handle_last_name(d)
-                d.proper_noun.save_to_db(db_cursor, headword.last_row_id)
+                d.proper_noun.save_proper_noun_to_db(db_cursor, headword.last_row_id, d.last_descriptor_id)
             else:
                 d.save_to_db(db_cursor, headword.last_row_id)
-                d.proper_noun.save_to_db(db_cursor, headword.last_row_id)
+                d.proper_noun.save_proper_noun_to_db(db_cursor, headword.last_row_id, d.last_descriptor_id)
 
 # Irrelevant for prop. nouns
 #    for headword in headwords_with_preverbs:
