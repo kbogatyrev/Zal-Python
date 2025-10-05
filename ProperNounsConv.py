@@ -1339,7 +1339,8 @@ def save_inflection_group_to_db(db_cursor, descriptor_id, descriptor, inflection
               inflection_group.fleeting_vowel,
               inflection_group.stem_augment_type,
               inflection_group.multipart,
-              inflection_group.is_second_part,
+#              inflection_group.is_second_part,   ???
+              None,   # comment
               False)  # is_edited
 
     db_query = u'INSERT INTO inflection VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
@@ -1510,7 +1511,7 @@ class Headword:
             self.headword_text, self.stress_dict = extract_stress_marks(self.headword_text, paragraph)
 
         if run_idx >= len(paragraph.runs):  # error??
-            return -1
+            return run_idx
 
         return run_idx
 
@@ -1715,9 +1716,9 @@ class ProperNoun:
             return True
 
         try:
-            spade_params = (self.word_id,
-                            descriptor_last_row_id,
-                            self.spade_text)
+            spade_params = (pn_last_row_id,
+                            self.spade_text,
+                            0)
             spade_query = u'INSERT INTO proper_nouns_spade VALUES (NULL, ?, ?, ?)'
             db_cursor.execute(spade_query, spade_params)
         except sqlite3.Error as sqlite_ex:
@@ -1804,7 +1805,6 @@ class InflectionGroup:
             return paragraph_offset
 
         #        warning(db_cursor, u'Unable to find inflection group.', paragraph)
-
 
         match = re.match(r'^\s*?([абвгдеёжзийклмнопрстуфхцчшщъыьэюя\.]+)?\s*?(\d{1,2}).*',
                          source_text[paragraph_offset:])
@@ -4008,8 +4008,8 @@ def handle_last_name(descriptor):
         descriptor.main_symbol = 'мо-жо'
         descriptor.save_to_db(db_cursor, headword.last_row_id)
     elif descriptor.last_name_type == LAST_NAME_TYPE.TOLSTOY:
-        descriptor.part_of_speech = POS.POS_ADJ
-        descriptor.main_symbol = 'п'
+        descriptor.part_of_speech = POS.POS_NOUN
+        descriptor.main_symbol = 'мо'
         descriptor.save_to_db(db_cursor, headword.last_row_id)
     elif descriptor.last_name_type == LAST_NAME_TYPE.KUZMIN:
         descriptor.part_of_speech = POS.POS_NOUN
@@ -4043,7 +4043,8 @@ if __name__ == "__main__":
 #    zal = Document('../Zal-Data/Ivanov.docx')
 #    zal = Document('../Zal-Data/Seva.docx')
 #    zal = Document('../Zal-Data/G_Pl_assumed.docx')
-#    zal = Document('../Zal-Data/Spade.docx')
+#    zal = Document('../Zal-Data/Granovskij.docx')
+#    zal = Document('../Zal-Data/Berlin.docx')
 
     #    out_doc = Document()
 
