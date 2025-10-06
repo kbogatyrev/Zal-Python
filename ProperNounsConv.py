@@ -1798,6 +1798,10 @@ class InflectionGroup:
         if self.descriptor.part_of_speech in uninflected_pos:
             return paragraph_offset
 
+        if self.descriptor.proper_noun.is_last_name:
+            if source_text[paragraph_offset] == '\uF07E':
+                return paragraph_offset
+
         if ('п' == self.descriptor.main_symbol and not self.descriptor.comma_after_main_symb):
             self.type = 1
             self.accent_type_1 = AT_ENUM.AT_A
@@ -2010,7 +2014,7 @@ class Descriptor:
         self.has_second_part = False
         self.is_second_part = False
         self.is_secondary = False  # after semicolon:   выходной	п	1b; м (выходной день)
-        self.is_last_name = False
+#        self.is_last_name = False
         self.last_name_type = LAST_NAME_TYPE.UNDEFINED
         self.last_name_inflection_type = -1
         self.last_name_accent_type = ''
@@ -2098,7 +2102,7 @@ class Descriptor:
         copy.has_second_part = self.has_second_part
         copy.is_secondary = self.is_secondary
         copy.is_second_part = self.is_second_part
-        copy.is_last_name = self.is_last_name
+#        copy.is_last_name = self.is_last_name
         copy.last_name_type = self.last_name_type
 
         return copy
@@ -2544,14 +2548,14 @@ class Descriptor:
         а женский -- как существительное, принадлежащее к модели жо 0
         '''
 
-        match = re.match(r'^(\d+)(.+?)\s\uF07E\s(\d+)', source_text[offset:])
-        #                                         ^-- tilde
-        if None != match:
+        match = re.match(r'^(\((.+)\)\t?)?(\d+)(.+?)\s\uF07E\s(\d+)', source_text[offset:])
+        #                                                      ^-- tilde
+        if match is not None:
             self.proper_noun.has_tilde = True
-            if match.group(1) is not None and match.group(2) is not None:
-#                inflection_type = match.group(1)
-#                accent_type = match.group(2)
-#                second_part = match.group(3)
+            if match.group(3) is not None and match.group(4) is not None:
+#                inflection_type = match.group(2)
+#                accent_type = match.group(3)
+#                second_part = match.group(4)
 
 #                ig = InflectionGroup(self)
 #                current_offset = ig.parse_inflection_group(self.paragraph, source_text, offset+match.start(1))
@@ -2560,8 +2564,16 @@ class Descriptor:
 
 #                offset += offset+match.start(1)
                 self.last_name_type = LAST_NAME_TYPE.MILLER
+                self.comment = match.group(2)
+                offset_to_inflection = offset + match.start(3)
+                offset_to_next = offset + match.end(4)
+        else:
+            match = re.match(r'^(\((.+)\)\t)', source_text[offset:])
+            if match is not None:
+                self.comment = match.group(2)
+                offset += match.end(1)
                 offset_to_inflection = offset
-                offset_to_next = offset + match.end(3)
+                offset_to_next = offset
 
         '''
         б) Дано единое обозначение типа склонения -- запись 0 или запись, начинающаяся с <жо
@@ -2618,7 +2630,7 @@ class Descriptor:
             primary_descriptor.inflection_symbol == primary_descriptor.main_symbol:         # doesn't seem to happen with other types
             self.last_name_type = LAST_NAME_TYPE.MILLER
         elif primary_descriptor.inflection_symbol != primary_descriptor.main_symbol:
-            kiki = True
+            gogo = True
         elif 0 == primary_descriptor.inflection_group.type:
             self.last_name_type = LAST_NAME_TYPE.VERDI
 
@@ -4045,10 +4057,11 @@ if __name__ == "__main__":
 #    zal = Document('../Zal-Data/G_Pl_assumed.docx')
 #    zal = Document('../Zal-Data/Granovskij.docx')
 #    zal = Document('../Zal-Data/Berlin.docx')
+#    zal = Document('../Zal-Data/Freud.docx')
 
     #    out_doc = Document()
 
-    out_file = codecs.open('test_data.txt', encoding='utf-16', mode='w')
+#    out_file = codecs.open('test_data.txt', encoding='utf-16', mode='w')
 
     dictionary = defaultdict(list)
 
@@ -4168,6 +4181,7 @@ if __name__ == "__main__":
     db_cursor.close()
     db_connection.close()
 
-    out_file.close()
+#    out_file.close()
+    errors_file.close()
 
     os._exit(0)
