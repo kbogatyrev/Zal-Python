@@ -6,6 +6,7 @@ import os
 import re
 import sqlite3
 import sys
+from copy import deepcopy
 from collections import defaultdict
 
 from docx import Document
@@ -673,7 +674,6 @@ def check_plus_sign(paragraph, source_text, paragraph_offset, descriptor):
 #        second_headword.lead_comment = comment
 
     paragraph_offset = paragraph_offset + plus_match.start(2)
-    second_descriptor = Descriptor(paragraph)
     second_descriptor = descriptor.copy()
     second_descriptor.is_second_part = True
     second_descriptor.proper_noun = descriptor.proper_noun.copy()
@@ -801,27 +801,28 @@ def check_spade(paragraph, source_text, paragraph_offset, headword, descriptor):
     offset_to_spade = source_text.find(u'\uF0AB')
 
     if -1 == offset_to_spade:
-        return '', -1, paragraph_offset
+        return '', '', -1, paragraph_offset
 
     start_offset = source_text.rfind(u'(', 0, offset_to_spade)
     match = re.match( \
-        r'^\((-)?([АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя][абвгдеёжзийклмнопрстуфхцчшщъыьэюя]*)(-)?\s\uF0AB', \
+        r'^(\((-)?([АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя][абвгдеёжзийклмнопрстуфхцчшщъыьэюя]*)(-)?\s\uF0AB\))', \
         source_text[start_offset:])
     if not match:
         warning(db_cursor, u'Error extracting spade information.', paragraph)
-        return '', -1, paragraph_offset
+        return '', '', -1, paragraph_offset
 
 #    descriptor.proper_noun.has_spade = True
 
-    left_dash = match.group(1)
-    substring_no_accents = match.group(2)
-    right_dash = match.group(3)
+    spade_sign = match.group(1)
+    left_dash = match.group(2)
+    substring_no_accents = match.group(3)
+    right_dash = match.group(4)
 
     # Find the overwritten part of the headword
     new_headword = headword.headword_text
 
 #    segment_with_accents = preprocess_sample(paragraph, paragraph_offset)
-    match_offset = start_offset + match.span(2)[0]
+    match_offset = start_offset + match.span(3)[0]
     segment_with_accents = preprocess_sample(paragraph, match_offset, match_offset+len(substring_no_accents))
     start_offset = -1
     stress_offset = 0
@@ -856,7 +857,7 @@ def check_spade(paragraph, source_text, paragraph_offset, headword, descriptor):
 
     # save with descriptor
 
-    return new_headword, stress_offset, paragraph_offset
+    return spade_sign, new_headword, stress_offset, paragraph_offset
 
 
 #    return paragraph_offset
@@ -1385,6 +1386,33 @@ class Headword:
         self.second_headword = None
         return
 
+    def copy(self):
+        copy = Headword()
+        copy.paragraph = self.paragraph
+        copy.source_id = self.source_id
+        copy.headword_text = self.headword_text
+        copy.stress_dict = deepcopy(self.stress_dict)
+        copy.homonym_nums = self.homonym_nums
+        copy.lead_comment = self.lead_comment
+        copy.trailing_comment = self.trailing_comment
+        copy.plural_of = self.plural_of
+        #       self.plural_of_start_run = -1
+        copy.variant = self.variant
+        copy.variant_stress_dict = deepcopy(self.variant_stress_dict)
+        copy.variant_homonym_nums = self.variant_homonym_nums
+        copy.variant_comment = self.variant_comment
+        copy.see_ref = self.see_ref
+        copy.back_ref = self.back_ref
+        copy.last_row_id = self.last_row_id
+        copy.seq_number = self.seq_number
+        copy.is_edited = self.is_edited
+        copy.spryazh_sm = self.spryazh_sm
+        copy.second_part = self.second_part
+        copy.has_second_part = self.has_second_part
+        copy.second_headword = self.second_headword
+
+        return copy
+
     def parse_source_data(self, paragraph, paragraph_offset, is_variant, has_second_part=False):
         run_idx = run_index_from_offset(paragraph, paragraph_offset)
         if run_idx < 0:
@@ -1656,6 +1684,7 @@ class ProperNoun:
         self.has_tilde = False
         self.g_pl_assumed = False
         self.has_space_separator = False
+        self.spade_mark = ''
         self.spade_text = ''
         self.spade_stress_pos = -1
         self.comment = ''
@@ -1676,6 +1705,7 @@ class ProperNoun:
         copy.has_tilde = self.has_tilde
         copy.g_pl_assumed = self.g_pl_assumed
         copy.has_space_separator = self.has_space_separator
+        copy.spade_mark = self.spade_mark
         copy.spade_text = self.spade_text
         copy.comment = self.comment
         copy.spade_text = self.spade_text
@@ -1717,9 +1747,10 @@ class ProperNoun:
 
         try:
             spade_params = (pn_last_row_id,
+                            self.spade_mark,
                             self.spade_text,
                             0)
-            spade_query = u'INSERT INTO proper_nouns_spade VALUES (NULL, ?, ?, ?)'
+            spade_query = u'INSERT INTO proper_nouns_spade VALUES (NULL, ?, ?, ?, ?)'
             db_cursor.execute(spade_query, spade_params)
         except sqlite3.Error as sqlite_ex:
             print('sqlite3 error: ', sqlite_ex.args[0])
@@ -2104,6 +2135,7 @@ class Descriptor:
         copy.is_second_part = self.is_second_part
 #        copy.is_last_name = self.is_last_name
         copy.last_name_type = self.last_name_type
+        copy.proper_noun = self.proper_noun
 
         return copy
 
@@ -2351,7 +2383,8 @@ class Descriptor:
         if current_offset >= len(source):
             return semicolon, current_offset
 
-        alt_form, alt_stress_pos, current_offset = check_spade(paragraph, source, current_offset, headword, self)
+        spade_mark, alt_form, alt_stress_pos, current_offset = check_spade(paragraph, source, current_offset, headword, self)
+        self.proper_noun.spade_mark = spade_mark.replace('\uF0AB', '\u2660')
         self.proper_noun.spade_text = alt_form
         self.proper_noun.spade_stress_pos = alt_stress_pos
 
@@ -2768,6 +2801,7 @@ class Descriptor:
 
     # make_graphic_stem()
 
+#   Save descriptor to DB
     def save_to_db(self, db_cursor, headword_id, is_second_part = False, last_descriptor_id = 0):
 
         difficult_forms = u''
@@ -4044,7 +4078,7 @@ if __name__ == "__main__":
     db_cursor = db_connection.cursor()
 
     errors_file = io.open('../Zal-Data/ZalData/conversion_errors_prop_nouns.txt', encoding='utf-16', mode='w')
-    zal = Document('../Zal-Data/ALL_PRI.docx')
+#    zal = Document('../Zal-Data/ALL_PRI.docx')
 #    zal = Document('../Zal-Data/Spade.docx')
 #    zal = Document('../Zal-Data/Semicolon_F.docx')
 #    zal = Document('../Zal-Data/NoHeadword.docx')
@@ -4058,6 +4092,8 @@ if __name__ == "__main__":
 #    zal = Document('../Zal-Data/Granovskij.docx')
 #    zal = Document('../Zal-Data/Berlin.docx')
 #    zal = Document('../Zal-Data/Freud.docx')
+#    zal = Document('../Zal-Data/Kaaba.docx')
+    zal = Document('../Zal-Data/Potsdam.docx')
 
     #    out_doc = Document()
 
@@ -4112,18 +4148,35 @@ if __name__ == "__main__":
 
     #    for current_paragraph_num in range (len(paragraphs))...
 
-    print ('Total paragraphs read: ' + str(len(paragraphs)))
-    print ('Total dictionary entries: ' + str(len(dictionary.items())))
+    out_dictionary = defaultdict(list)
+    for headword, descriptors in dictionary.items():
+        out_dictionary[headword] = descriptors
+        count = 0
+        split = False
+        for pos, is_primary in headword.stress_dict.items():
+            if is_primary:
+                if count > 0:
+                    second_headword = headword.copy()
+                    del second_headword.stress_dict[next(iter(second_headword.stress_dict.keys()))]
+                    second_descriptor = dictionary[headword][0].copy()
+                    out_dictionary[second_headword] = [second_descriptor]
+                    split = True
+                count += 1
+        if split:
+            headword.stress_dict.popitem()
+
+    print('Total paragraphs read: ' + str(len(paragraphs)))
+    print('Total dictionary entries: ' + str(len(dictionary.items())))
 
 #    headwords_with_preverbs = []
-    for headword, descriptor in dictionary.items():
+    for headword, descriptor in out_dictionary.items():
         last_descriptor_id = 0
         if headword.has_second_part:
             # special case: xurda-murda
             ret = save_headword(headword.second_headword)
             if not ret:
                 continue
-            descriptors = dictionary[headword]
+            descriptors = out_dictionary[headword]
             first_part_d = None
             for d in descriptors:
                 if not d.is_second_part:
@@ -4148,7 +4201,7 @@ if __name__ == "__main__":
         ret = save_headword(headword)
         if not ret:
             continue
-        descriptors = dictionary[headword]
+        descriptors = out_dictionary[headword]
         for d in descriptors:
             if d.is_second_part:
                 continue
