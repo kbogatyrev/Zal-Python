@@ -2581,7 +2581,8 @@ class Descriptor:
         а женский -- как существительное, принадлежащее к модели жо 0
         '''
 
-        match = re.match(r'^(\((.+)\)\t?)?(\d+)(.+?)\s\uF07E\s(\d+)', source_text[offset:])
+#        match = re.match(r'^(\((.+)\)\t?)?(\d+)(.+?)\s\uF07E\s(\d+)', source_text[offset:])
+        match = re.match(r'^(\((.+)\)\t?)?(\d+)(.+?)\s\uF07E\s(\d+)(?:\s*(?:\((.+)\)))?', source_text[offset:])
         #                                                      ^-- tilde
         if match is not None:
             self.proper_noun.has_tilde = True
@@ -2597,9 +2598,14 @@ class Descriptor:
 
 #                offset += offset+match.start(1)
                 self.last_name_type = LAST_NAME_TYPE.MILLER
-                self.comment = match.group(2)
+                self.comment = match.group(2)       # ?
+                self.trailing_comment = match.group(6)
                 offset_to_inflection = offset + match.start(3)
                 offset_to_next = offset + match.end(4)
+
+                if match.group(5) != '0':
+                    print ('**** Tilde followed by NOT 0: ' + source_text)
+
         else:
             match = re.match(r'^(\((.+)\)\t)', source_text[offset:])
             if match is not None:
@@ -4021,8 +4027,8 @@ def save_headword(headword):
 
 def handle_last_name(descriptor):
     if d.last_name_type == LAST_NAME_TYPE.MILLER:
-        descriptor.part_of_speech = POS.POS_NOUN
-        descriptor.main_symbol = 'мо'
+        descriptor.part_of_speech = POS.POS_LAST_NAME
+        descriptor.main_symbol = 'ф.'
         descriptor.inflection_symbol = 'мо'
         #                descriptor.inflection_group.type = descriptor.last_name_inflection_type
         #                try:
@@ -4030,18 +4036,18 @@ def handle_last_name(descriptor):
         #                except Exception as e:
         #                    print(e)
         descriptor.save_to_db(db_cursor, headword.last_row_id)
-        descriptor.main_symbol = 'жо'
-        descriptor.inflection_symbol = 'жо'
-        try:
-            descriptor.inflection_group.type = 0
-        except Exception as e:
-            print('Exception: %s, %s, %s' % (sys.exc_info()[0], e, headword.headword_text))
-            return False
-        descriptor.graphic_stem = d.make_graphic_stem(headword.headword_text)
-        descriptor.save_to_db(db_cursor, headword.last_row_id)
+#        descriptor.main_symbol = 'ф.'
+#        descriptor.inflection_symbol = 'жо'
+#        try:
+#            descriptor.inflection_group.type = 0
+#        except Exception as e:
+#            print('Exception: %s, %s, %s' % (sys.exc_info()[0], e, headword.headword_text))
+#            return False
+#        descriptor.graphic_stem = d.make_graphic_stem(headword.headword_text)
+#        descriptor.save_to_db(db_cursor, headword.last_row_id)
     elif descriptor.last_name_type == LAST_NAME_TYPE.VERDI:
-        descriptor.part_of_speech = POS.POS_NOUN
-        descriptor.main_symbol = 'мо-жо'
+        descriptor.part_of_speech = POS.POS_LAST_NAME
+        descriptor.main_symbol = 'ф.'
         descriptor.inflection_symbol = 'мо'
         try:
             descriptor.inflection_group.type = 0
@@ -4050,18 +4056,18 @@ def handle_last_name(descriptor):
             return False
         descriptor.save_to_db(db_cursor, headword.last_row_id)
     elif descriptor.last_name_type == LAST_NAME_TYPE.GLINKA:
-        descriptor.part_of_speech = POS.POS_NOUN
-        descriptor.main_symbol = 'мо-жо'
+        descriptor.part_of_speech = POS.POS_LAST_NAME
+        descriptor.main_symbol = 'ф.'
         descriptor.save_to_db(db_cursor, headword.last_row_id)
     elif descriptor.last_name_type == LAST_NAME_TYPE.TOLSTOY:
-        descriptor.part_of_speech = POS.POS_NOUN
-        descriptor.main_symbol = 'мо'
+        descriptor.part_of_speech = POS.POS_LAST_NAME
+        descriptor.main_symbol = 'ф.'
         descriptor.save_to_db(db_cursor, headword.last_row_id)
     elif descriptor.last_name_type == LAST_NAME_TYPE.KUZMIN:
-        descriptor.part_of_speech = POS.POS_NOUN
-        descriptor.main_symbol = 'мо'
+        descriptor.part_of_speech = POS.POS_LAST_NAME
+        descriptor.main_symbol = 'ф.'
         descriptor.save_to_db(db_cursor, headword.last_row_id)
-        descriptor.main_symbol = 'жо'
+#        descriptor.main_symbol = 'ф.'
 #        descriptor.save_to_db(db_cursor, headword.last_row_id)
     else:
         print('Error: last name expected: {descriptor.{graphic_stem}.')
@@ -4078,7 +4084,7 @@ if __name__ == "__main__":
     db_cursor = db_connection.cursor()
 
     errors_file = io.open('../Zal-Data/ZalData/conversion_errors_prop_nouns.txt', encoding='utf-16', mode='w')
-#    zal = Document('../Zal-Data/ALL_PRI.docx')
+    zal = Document('../Zal-Data/ALL_PRI.docx')
 #    zal = Document('../Zal-Data/Spade.docx')
 #    zal = Document('../Zal-Data/Semicolon_F.docx')
 #    zal = Document('../Zal-Data/NoHeadword.docx')
@@ -4093,7 +4099,8 @@ if __name__ == "__main__":
 #    zal = Document('../Zal-Data/Berlin.docx')
 #    zal = Document('../Zal-Data/Freud.docx')
 #    zal = Document('../Zal-Data/Kaaba.docx')
-    zal = Document('../Zal-Data/Potsdam.docx')
+#    zal = Document('../Zal-Data/Potsdam.docx')
+#    zal = Document('../Zal-Data/Miller.docx')
 
     #    out_doc = Document()
 
