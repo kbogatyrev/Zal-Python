@@ -1354,6 +1354,18 @@ def save_inflection_group_to_db(db_cursor, descriptor_id, descriptor, inflection
             db_query = u'INSERT INTO common_deviation VALUES (NULL, ?, ?, ?, ?)'
             db_cursor.execute(db_query, params)
 
+    if inflection_group.g_pl_assumed:
+        params = (ig_id, 'Noun_Pl_G')
+        db_query = u'INSERT INTO difficult_forms VALUES (NULL, ?, ?)'
+        db_cursor.execute(db_query, params)
+
+    #if self.has_missing_forms:
+    #            for item in self.missing_forms:
+    #                params = (self.descriptor_id, item)
+    #                db_query = u'INSERT INTO missing_forms VALUES (NULL, ?, ?)'
+    #                db_cursor.execute(db_query, params)
+
+
 
 # =================================================================================================
 
@@ -1797,6 +1809,9 @@ class InflectionGroup:
         self.common_deviations = []  # list of pairs: { bool, numeric }
         self.descriptor = descriptor
         self.multipart = 0
+        self.missing_forms = []
+        self.difficult_forms = []
+        self.g_pl_assumed = False
 
         return
 
@@ -1816,6 +1831,9 @@ class InflectionGroup:
         copy.common_deviations = self.common_deviations
         copy.descriptor = self.descriptor
         copy.multipart = self.multipart
+        copy.missing_forms = self.missing_forms
+        copy.difficult_forms = self.difficult_forms
+        copy.g_pl_assumed = self.g_pl_assumed
 
         return copy
 
@@ -1954,6 +1972,8 @@ class InflectionGroup:
 
         if paragraph_offset < len(source_text) and '÷' == source_text[paragraph_offset]:
             self.descriptor.proper_noun.g_pl_assumed = True
+            self.descriptor.has_difficult_forms = True
+            self.g_pl_assumed = True
 
         paragraph_offset = check_circled_digit(paragraph, source_text, paragraph_offset, self)
 
@@ -1961,7 +1981,6 @@ class InflectionGroup:
             paragraph_offset += 1
 
         return paragraph_offset  # parse_inflection_group
-
 
 #  class InflectionGroup
 
@@ -2891,17 +2910,17 @@ class Descriptor:
                               self.aspect_alt_pair_comment, False)
                     db_cursor.execute(db_query, params)
 
-            if self.has_difficult_forms:
-                for item in self.difficult_forms:
-                    params = (self.descriptor_id, item)
-                    db_query = u'INSERT INTO difficult_forms VALUES (NULL, ?, ?)'
-                    db_cursor.execute(db_query, params)
+#            if self.has_difficult_forms:
+#                for item in self.difficult_forms:
+#                    params = (self.descriptor_id, item)
+#                    db_query = u'INSERT INTO difficult_forms VALUES (NULL, ?, ?)'
+#                    db_cursor.execute(db_query, params)
 
-            if self.has_missing_forms:
-                for item in self.missing_forms:
-                    params = (self.descriptor_id, item)
-                    db_query = u'INSERT INTO missing_forms VALUES (NULL, ?, ?)'
-                    db_cursor.execute(db_query, params)
+#            if self.has_missing_forms:
+#                for item in self.missing_forms:
+#                    params = (self.descriptor_id, item)
+#                    db_query = u'INSERT INTO missing_forms VALUES (NULL, ?, ?)'
+#                    db_cursor.execute(db_query, params)
 
             if self.has_irregular_forms:
                 self.irregular_forms.save_to_db(db_cursor, self.descriptor_id)
@@ -4084,7 +4103,7 @@ if __name__ == "__main__":
     db_cursor = db_connection.cursor()
 
     errors_file = io.open('../Zal-Data/ZalData/conversion_errors_prop_nouns.txt', encoding='utf-16', mode='w')
-    zal = Document('../Zal-Data/ALL_PRI.docx')
+#    zal = Document('../Zal-Data/ALL_PRI.docx')
 #    zal = Document('../Zal-Data/Spade.docx')
 #    zal = Document('../Zal-Data/Semicolon_F.docx')
 #    zal = Document('../Zal-Data/NoHeadword.docx')
@@ -4101,6 +4120,7 @@ if __name__ == "__main__":
 #    zal = Document('../Zal-Data/Kaaba.docx')
 #    zal = Document('../Zal-Data/Potsdam.docx')
 #    zal = Document('../Zal-Data/Miller.docx')
+    zal = Document('../Zal-Data/Moskva.docx')
 
     #    out_doc = Document()
 
