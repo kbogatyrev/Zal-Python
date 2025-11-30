@@ -678,6 +678,7 @@ def check_plus_sign(paragraph, source_text, paragraph_offset, descriptor):
     second_descriptor.is_second_part = True
     second_descriptor.proper_noun = descriptor.proper_noun.copy()
     descriptor.has_second_part = True
+
     if not descriptor.comma_after_main_symb:
         semicolon, paragraph_offset = second_descriptor.extract_main_symbol(paragraph, source_text, paragraph_offset, False, None)
     s, paragraph_offset = second_descriptor.check_angle_brackets(paragraph, paragraph.text, paragraph_offset)
@@ -2537,7 +2538,8 @@ class Descriptor:
                 self.section = section_num
             return semicolon, offset_to_next
         else:
-            if extracted in ['ф.', 'ф.,'] or main_descriptor is not None and main_descriptor.proper_noun.is_last_name:
+            if extracted in ['ф.', 'ф.,'] or main_descriptor is not None and main_descriptor.proper_noun.is_last_name \
+                    and not main_descriptor.is_second_part:
                 self.proper_noun.is_last_name = True
                 if self.is_secondary and inflection_offset > -1:
                     self.get_secondary_last_name_type(main_descriptor)
@@ -4121,6 +4123,7 @@ if __name__ == "__main__":
 #    zal = Document('../Zal-Data/Potsdam.docx')
 #    zal = Document('../Zal-Data/Miller.docx')
 #    zal = Document('../Zal-Data/Moskva.docx')
+#    zal = Document('../Zal-Data/Rimskij-Korsakov.docx')
 
     #    out_doc = Document()
 
