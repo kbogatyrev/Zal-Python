@@ -4103,7 +4103,7 @@ if __name__ == "__main__":
     db_cursor = db_connection.cursor()
 
     errors_file = io.open('../Zal-Data/ZalData/conversion_errors_prop_nouns.txt', encoding='utf-16', mode='w')
-#    zal = Document('../Zal-Data/ALL_PRI.docx')
+    zal = Document('../Zal-Data/ALL_PRI.docx')
 #    zal = Document('../Zal-Data/Spade.docx')
 #    zal = Document('../Zal-Data/Semicolon_F.docx')
 #    zal = Document('../Zal-Data/NoHeadword.docx')
@@ -4120,7 +4120,7 @@ if __name__ == "__main__":
 #    zal = Document('../Zal-Data/Kaaba.docx')
 #    zal = Document('../Zal-Data/Potsdam.docx')
 #    zal = Document('../Zal-Data/Miller.docx')
-    zal = Document('../Zal-Data/Moskva.docx')
+#    zal = Document('../Zal-Data/Moskva.docx')
 
     #    out_doc = Document()
 
@@ -4166,7 +4166,6 @@ if __name__ == "__main__":
 
         text_to_headword_obj[headword.headword_text] = headword
         headword.seq_number = current_paragraph_num
-#        headword.seq_number = current_paragraph_num
 
         if p.text.rstrip().endswith(';'):
             outer_semicolon = True
@@ -4176,8 +4175,9 @@ if __name__ == "__main__":
     #    for current_paragraph_num in range (len(paragraphs))...
 
     out_dictionary = defaultdict(list)
-    for headword, descriptors in dictionary.items():
-        out_dictionary[headword] = descriptors
+#    for headword, descriptors in dictionary.items():
+    for headword in dictionary.keys():
+        out_dictionary[headword] = dictionary[headword]
         count = 0
         split = False
         for pos, is_primary in headword.stress_dict.items():
@@ -4196,9 +4196,11 @@ if __name__ == "__main__":
     print('Total dictionary entries: ' + str(len(dictionary.items())))
 
 #    headwords_with_preverbs = []
-    for headword, descriptor in out_dictionary.items():
+#    for headword, descriptor in out_dictionary.items():
+    second_headword_handled = False
+    for headword in out_dictionary.keys():
         last_descriptor_id = 0
-        if headword.has_second_part:
+        if headword.has_second_part and not second_headword_handled:
             # special case: xurda-murda
             ret = save_headword(headword.second_headword)
             if not ret:
@@ -4225,9 +4227,18 @@ if __name__ == "__main__":
                 d.save_to_db(db_cursor, headword.second_headword.last_row_id, True)
                                                                                 # ^-- 2nd part
                 last_descriptor_id = d.last_descriptor_id
-        ret = save_headword(headword)
-        if not ret:
-            continue
+                ret = save_headword(headword)
+                if not ret:
+                    continue
+                second_headword_handled = True
+                continue
+        else:
+            if not second_headword_handled:
+                ret = save_headword(headword)
+                if not ret:
+                    continue
+            else:
+                second_headword_handled = False
         descriptors = out_dictionary[headword]
         for d in descriptors:
             if d.is_second_part:
