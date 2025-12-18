@@ -1975,6 +1975,7 @@ class InflectionGroup:
             self.descriptor.proper_noun.g_pl_assumed = True
             self.descriptor.has_difficult_forms = True
             self.g_pl_assumed = True
+            paragraph_offset += 1
 
         paragraph_offset = check_circled_digit(paragraph, source_text, paragraph_offset, self)
 
@@ -4101,7 +4102,7 @@ def handle_last_name(descriptor):
 #  Main
 #
 if __name__ == "__main__":
-    db_connection = sqlite3.connect('../Zal-Data/ZalData/ProperNouns.db3')
+    db_connection = sqlite3.connect('../Zal-Data/ZalData/ZalData_ProperNounsOnly.db3')
     db_cursor = db_connection.cursor()
 
     errors_file = io.open('../Zal-Data/ZalData/conversion_errors_prop_nouns.txt', encoding='utf-16', mode='w')
@@ -4124,6 +4125,10 @@ if __name__ == "__main__":
 #    zal = Document('../Zal-Data/Miller.docx')
 #    zal = Document('../Zal-Data/Moskva.docx')
 #    zal = Document('../Zal-Data/Rimskij-Korsakov.docx')
+#    zal = Document('../Zal-Data/Sarov.docx')
+#    zal = Document('../Zal-Data/Kanarskie.docx')
+#    zal = Document('../Zal-Data/Chaplin.docx')
+#    zal = Document('../Zal-Data/Maldivskie.docx')
 
     #    out_doc = Document()
 
