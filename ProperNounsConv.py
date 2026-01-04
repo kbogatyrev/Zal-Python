@@ -1616,7 +1616,7 @@ class Headword:
                       self.spryazh_sm,
                       self.second_part,
                       False)  # is_edited
-            db_query = u'INSERT INTO headword VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)'
+            db_query = u'INSERT INTO headword VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             db_cursor.execute(db_query, params)
             self.last_row_id = db_cursor.lastrowid
 
@@ -1740,11 +1740,13 @@ class ProperNoun:
                          self.has_tilde,                       #  6
                          self.g_pl_assumed,                    #  7
                          self.has_space_separator,             #  8
-                         self.comment,                         #  9
-                         self.is_edited)                       # 10
+                         '',                                   #  9  extra_word_l
+                         '',                                   # 10  extra_word_r
+                         self.comment,                         # 11
+                         self.is_edited)                       # 12
 
-            pn_query = u'INSERT INTO proper_nouns VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-                                                        #       1  2  3  4  5  6  7  8  9  10
+            pn_query = u'INSERT INTO proper_nouns VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                                                        #       1  2  3  4  5  6  7  8  9  10 11 12
             db_cursor.execute(pn_query, pn_params)
             pn_last_row_id = db_cursor.lastrowid
 
@@ -4102,7 +4104,7 @@ def handle_last_name(descriptor):
 #  Main
 #
 if __name__ == "__main__":
-    db_connection = sqlite3.connect('../Zal-Data/ZalData/ZalData_ProperNounsOnly.db3')
+    db_connection = sqlite3.connect('../Zal-Data/ZalData/ZalData_ProperNounsOnly_CLEAR.db3')
     db_cursor = db_connection.cursor()
 
     errors_file = io.open('../Zal-Data/ZalData/conversion_errors_prop_nouns.txt', encoding='utf-16', mode='w')
