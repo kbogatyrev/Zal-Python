@@ -113,6 +113,9 @@ def merge_proper_nouns(db_cursor):
             db_cursor.execute (hw_insert_query, data)
             word_id = db_cursor.lastrowid
 
+            merge_stress(db_cursor, word_id)
+            merge_descriptor(db_cursor, word_id)
+
     #----------------------------------------------------------------------------------------
 
             pn_insert_query = """
@@ -198,6 +201,114 @@ def merge_proper_nouns(db_cursor):
 
                 db_cursor.execute(spade_insert_query, data)
 
+    except IOError as io_ex:
+        print('IO Error.', io_ex.args[0])
+    except sqlite3.Error as sqlite_ex:
+        print('sqlite3 error: ', sqlite_ex.args[0])
+    except Exception as e:
+        print('Exception: %s, %s' % (sys.exc_info()[0], e))
+
+def merge_stress(db_cursor, headword_id):
+
+    s_insert_query = f"""
+        INSERT INTO M.stress (headword_id, stress_position, is_primary, is_variant, is_edited)
+        SELECT headword_id, stress_position, is_primary, is_variant, 0
+        FROM stress s
+        WHERE s.headword_id = {headword_id};
+    """
+
+    try:
+        db_cursor.execute(s_insert_query)
+    except IOError as io_ex:
+        print('IO Error.', io_ex.args[0])
+    except sqlite3.Error as sqlite_ex:
+        print('sqlite3 error: ', sqlite_ex.args[0])
+    except Exception as e:
+        print('Exception: %s, %s' % (sys.exc_info()[0], e))
+
+def merge_descriptor(db_cursor, headword_id):
+    d_insert_query = f"""
+        INSERT INTO M.descriptor (
+            word_id, 
+            graphic_stem,
+            second_part_id,
+            is_variant, 
+            main_symbol,
+            part_of_speech,
+            is_plural_of,
+            is_intransitive,
+            is_reflexive, 
+            main_symbol_plural_of, 
+            alt_main_symbol, 
+            inflection_type, 
+            comment, 
+            alt_main_symbol_comment, 
+            alt_inflection_comment, 
+            verb_stem_alternation, 
+            part_past_pass_zhd, 
+            section, 
+            no_comparative, 
+            no_long_forms, 
+            assumed_forms, 
+            yo_alternation, 
+            o_alternation, 
+            second_genitive, 
+            is_impersonal, 
+            is_iterative, 
+            has_aspect_pair, 
+            has_difficult_forms, 
+            has_missing_forms, 
+            has_irregular_forms, 
+            irregular_forms_lead_comment, 
+            restricted_contexts, 
+            contexts, 
+            cognate, 
+            trailing_comment, 
+            is_edited        
+        )
+        SELECT 
+            word_id, 
+            graphic_stem, 
+            second_part_id, 
+            is_variant, 
+            main_symbol, 
+            part_of_speech, 
+            is_plural_of, 
+            0,                  -- is_intransitive 
+            0,                  -- is_reflexive
+            '',                 -- main_symbol_plural_of 
+            alt_main_symbol, 
+            inflection_type, 
+            comment, 
+            '',                 -- alt_main_symbol_comment 
+            '',                 -- alt_inflection_comment 
+            '',                 -- verb_stem_alternation 
+            0,                  -- part_past_pass_zhd 
+            section, 
+            no_comparative, 
+            0,                  -- no_long_forms, 
+            assumed_forms, 
+            yo_alternation, 
+            o_alternation, 
+            second_genitive, 
+            0,                  -- is_impersonal 
+            0,                  -- is_iterative 
+            0,                  -- has_aspect_pair 
+            has_difficult_forms, 
+            has_missing_forms, 
+            has_irregular_forms, 
+            irregular_forms_lead_comment, 
+            restricted_contexts, 
+            contexts, 
+            cognate, 
+            trailing_comment, 
+            0        
+        FROM descriptor d
+        WHERE d.word_id = {headword_id};
+    """
+
+    try:
+        db_cursor.execute(d_insert_query)
     except IOError as io_ex:
         print('IO Error.', io_ex.args[0])
     except sqlite3.Error as sqlite_ex:
