@@ -149,17 +149,16 @@ def merge_proper_nouns (db_cursor):
                 new_headword_id,
                 0,
                 pn_dict['is_hypocoristicon'],
-                hw_dict['usage'],
-                hw_dict['variant'],
-                hw_dict['variant_comment'],
-                hw_dict['see_ref'],
-                hw_dict['back_ref'],
-                -1,
-                hw_dict['spryazh_sm'],
-                hw_dict['second_part'],
+                pn_dict['opposite_gender'],
+                pn_dict['is_last_name'],
+                pn_dict['has_tilde'],
+                pn_dict['g_pl_assumed'],
+                pn_dict['has_space_separator'],
+                pn_dict['extra_word_l'],
+                pn_dict['extra_word_r'],
+                pn_dict['comment'],
                 0
             )
-
             db_cursor.execute (pn_insert_query, data)
             pn_id = db_cursor.lastrowid
 
@@ -630,15 +629,12 @@ if __name__ == "__main__":
     db_connection = sqlite3.connect('../Zal-Data/ZalData/ZalData_ProperNounsOnly.db3')
     db_cursor = db_connection.cursor()
 
-    sql_attach = "ATTACH DATABASE '../Zal-Data/ZalData/ZalData_Master.db3' AS 'M';"
+    sql_attach = "ATTACH DATABASE '../Zal-Data/ZalData/ZalData_Master_NO_PN.db3' AS 'M';"
     db_cursor.execute (sql_attach)
 
-#    merge_proper_nouns (db_cursor)
-
-#    db_connection.commit()
-
+    merge_proper_nouns (db_cursor)
+    db_connection.commit()
     merge_compounds (db_cursor)
-
     db_connection.commit()
 
 #    merge_incomplete_parses (db_cursor)
